@@ -104,16 +104,18 @@ def genear_tif(ruta_wrfout, variable, time_idx, out_path):
 def genear_tif_prec(ruta_wrfout, out_path=None):
     plsm = abrir_plsm(ruta_wrfout)
     if out_path == None:
-        out_path = 'ppn_' + plsm.START_DATE[:-6] + '.tif'
+        out_path = 'geotiff/ppn_' + plsm.START_DATE[:-6]
     plsm.variables['RAINNC'].values = plsm.variables['RAINNC'].values + 1000
     plsm.variables['RAINC'].values = plsm.variables['RAINC'].values + 1000
     rainnc = convertir_variable(plsm, 'RAINNC')
     rainc = convertir_variable(plsm, 'RAINC')
-    arr_33 = rainnc.RAINNC[33].values[:,:] + rainc.RAINC[33].values[:,:]
-    arr_9 = rainnc.RAINNC[9].values[:,:] + rainc.RAINC[9].values[:,:]
-    arr = arr_33 - arr_9
-    arr[arr_9 == 0] = np.nan 
-    guardar_tif(rainnc, arr, out_path)
+    arrs = {}
+    for t in range(len(plsm.coords['time'])):
+        arrs[t] = rainnc.RAINNC[t].values[:,:] + rainc.RAINC[t].values[:,:]
+        arrs[t][arrs[t] == 0] = np.nan
+    for t in range(1, len(plsm.coords['time'])):
+        guardar_tif(rainnc, arrs[t] - arrs[t-1], out_path + '_' + str(t) + '.tif')
+    guardar_tif(rainnc, arrs[33] - arrs[9], out_path + '.tif')
     plsm.close()
 
 
@@ -158,19 +160,48 @@ def guardar_tabla(cuencas_gdf_ppn, outdir, rundate, configuracion):
     cuencas_gdf_ppn.to_csv(path, index=False)
 
 
+def generar_tabla_por_hora(cuencas_gdf_ppn, outdir, rundate, configuracion):
+    path = outdir + rundate.strftime('%Y_%m/%d/cordoba/cuencas/') + 'ppn_por_hora_' + configuracion + '.csv'
+    try:
+        os.makedirs(os.path.dirname(path))
+    except OSError:
+        pass
+    cuencas_gdf_ppn = cuencas_gdf_ppn[['subcuenca', 'mean']].round(2)
+    tabla_hora = pd.DataFrame(columns=cuencas_gdf_ppn.subcuenca, 
+                              index=pd.DatetimeIndex(start=rundate, 
+                                                     end=(rundate + datetime.timedelta(hours=24+9)), 
+                                                     freq='H'))
+    tabla_hora.index.name = 'fecha'
+    for i in range(1, len(tabla_hora)):
+        cuencas_gdf = gpd.read_file('shapefiles/Cuencas hidrográficas.shp')
+        with rasterio.open("geotiff/ppn_" + str(i) + ".tif") as src:
+            affine = src.transform
+            array = src.read(1)
+            df_zonal_stats = pd.DataFrame(zonal_stats(cuencas_gdf, array, affine=affine))
+        
+        cuencas_gdf = cuencas_gdf.rename(columns={'Subcuenca' : 'subcuenca', 'Cuenca' : 'cuenca'})
+        cuencas_gdf = pd.concat([cuencas_gdf['subcuenca'], df_zonal_stats['mean']], axis=1) 
+        cuencas_gdf = cuencas_gdf.dropna(subset=['mean']).set_index('subcuenca')
+        tabla_hora.iloc[i] = cuencas_gdf['mean']
+    tabla_hora = tabla_hora.astype(float).round(2)
+    tabla_hora.to_csv(path)
+
+
 def generar_producto_cuencas(wrfout, outdir_productos, outdir_tabla, configuracion):
     # Abrimos DataFrame con las cuentas
     cuencas_gdf = gpd.read_file('shapefiles/Cuencas hidrográficas.shp')
 
     rundate = corregir_wrfout(wrfout)
 
-    genear_tif_prec(wrfout + '.nc', out_path='geotiff/ppn.tif')
+    genear_tif_prec(wrfout + '.nc', out_path='geotiff/ppn')
 
     cuencas_gdf_ppn = integrar_en_cuencas(cuencas_gdf)
 
     generar_imagen(cuencas_gdf_ppn, outdir_productos, rundate, configuracion)
 
     guardar_tabla(cuencas_gdf_ppn, outdir_tabla, rundate, configuracion)
+
+    generar_tabla_por_hora(cuencas_gdf_ppn, outdir_tabla, rundate, configuracion)
 
     # Eliminamos el wrfout que creamos
     os.remove(wrfout + '.nc')
