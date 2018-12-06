@@ -184,6 +184,7 @@ def generar_tabla_por_hora(cuencas_gdf_ppn, outdir, rundate, configuracion):
         cuencas_gdf = cuencas_gdf.dropna(subset=['mean']).set_index('subcuenca')
         tabla_hora.iloc[i] = cuencas_gdf['mean']
     tabla_hora = tabla_hora.astype(float).round(2)
+    tabla_hora.index = tabla_hora.index + datetime.timedelta(hours=-3)
     tabla_hora.to_csv(path)
 
 
