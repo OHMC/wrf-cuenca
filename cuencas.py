@@ -123,7 +123,7 @@ def integrar_en_cuencas(cuencas_gdf):
     with rasterio.open("geotiff/ppn.tif") as src:
         affine = src.transform
         array = src.read(1)
-        df_zonal_stats = pd.DataFrame(zonal_stats(cuencas_gdf, array, affine=affine))
+        df_zonal_stats = pd.DataFrame(zonal_stats(cuencas_gdf, array, affine=affine, all_touched=True))
     
     cuencas_gdf_ppn = pd.concat([cuencas_gdf, df_zonal_stats], axis=1) 
     cuencas_gdf_ppn = cuencas_gdf_ppn.dropna(subset=['mean'])
@@ -177,7 +177,7 @@ def generar_tabla_por_hora(cuencas_gdf_ppn, outdir, rundate, configuracion):
         with rasterio.open("geotiff/ppn_" + str(i) + ".tif") as src:
             affine = src.transform
             array = src.read(1)
-            df_zonal_stats = pd.DataFrame(zonal_stats(cuencas_gdf, array, affine=affine))
+            df_zonal_stats = pd.DataFrame(zonal_stats(cuencas_gdf, array, affine=affine, all_touched=True))
         
         cuencas_gdf = cuencas_gdf.rename(columns={'Subcuenca' : 'subcuenca', 'Cuenca' : 'cuenca'})
         cuencas_gdf = pd.concat([cuencas_gdf['subcuenca'], df_zonal_stats['mean']], axis=1) 
