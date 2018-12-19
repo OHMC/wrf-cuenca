@@ -164,8 +164,8 @@ def generar_tabla_por_hora(outdir, rundate, configuracion):
     path = outdir + rundate.strftime('%Y_%m/%d/cordoba/cuencas/') + 'ppn_por_hora_' + configuracion + '.csv'
     path_sa = outdir + rundate.strftime('%Y_%m/%d/cordoba/cuencas/') + 'san_antonio/ppn_por_hora_sa_' + configuracion + '.csv'
     try:
-        os.makedirs(os.path.dirname(path))
         os.makedirs(os.path.dirname(path_sa))
+        os.makedirs(os.path.dirname(path))
     except OSError:
         pass
     cuencas_gdf = gpd.read_file('shapefiles/Cuencas hidrográficas.shp')
