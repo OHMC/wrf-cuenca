@@ -160,32 +160,52 @@ def guardar_tabla(cuencas_gdf_ppn, outdir, rundate, configuracion):
     cuencas_gdf_ppn.to_csv(path, index=False)
 
 
-def generar_tabla_por_hora(cuencas_gdf_ppn, outdir, rundate, configuracion):
+def generar_tabla_por_hora(outdir, rundate, configuracion):
     path = outdir + rundate.strftime('%Y_%m/%d/cordoba/cuencas/') + 'ppn_por_hora_' + configuracion + '.csv'
+    path_sa = outdir + rundate.strftime('%Y_%m/%d/cordoba/cuencas/') + 'san_antonio/ppn_por_hora_sa_' + configuracion + '.csv'
     try:
         os.makedirs(os.path.dirname(path))
+        os.makedirs(os.path.dirname(path_sa))
     except OSError:
         pass
-    cuencas_gdf_ppn = cuencas_gdf_ppn[['subcuenca', 'mean']].round(2)
-    tabla_hora = pd.DataFrame(columns=cuencas_gdf_ppn.subcuenca, 
+    cuencas_gdf = gpd.read_file('shapefiles/Cuencas hidrográficas.shp')
+    cuencas_gdf = cuencas_gdf.rename(columns={'Subcuenca' : 'subcuenca', 'Cuenca' : 'cuenca'})
+    tabla_hora = pd.DataFrame(columns=cuencas_gdf.subcuenca, 
                               index=pd.DatetimeIndex(start=rundate, 
                                                      end=(rundate + datetime.timedelta(hours=24+9)), 
                                                      freq='H'))
     tabla_hora.index.name = 'fecha'
+    cuencas_gdf_sa = gpd.read_file('shapefiles/cuencas_sa.shp')
+    tabla_hora_sa = pd.DataFrame(columns=cuencas_gdf_sa.index, 
+                              index=pd.DatetimeIndex(start=rundate, 
+                                                     end=(rundate + datetime.timedelta(hours=24+9)), 
+                                                     freq='H'))
+    tabla_hora_sa.index.name = 'fecha'
     for i in range(1, len(tabla_hora)):
         cuencas_gdf = gpd.read_file('shapefiles/Cuencas hidrográficas.shp')
+        cuencas_gdf_sa = gpd.read_file('shapefiles/cuencas_sa.shp')
         with rasterio.open("geotiff/ppn_" + str(i) + ".tif") as src:
             affine = src.transform
             array = src.read(1)
             df_zonal_stats = pd.DataFrame(zonal_stats(cuencas_gdf, array, affine=affine, all_touched=True))
-        
+            df_zonal_stats_sa = pd.DataFrame(zonal_stats(cuencas_gdf_sa, array, affine=affine, all_touched=True))
+
         cuencas_gdf = cuencas_gdf.rename(columns={'Subcuenca' : 'subcuenca', 'Cuenca' : 'cuenca'})
         cuencas_gdf = pd.concat([cuencas_gdf['subcuenca'], df_zonal_stats['mean']], axis=1) 
         cuencas_gdf = cuencas_gdf.dropna(subset=['mean']).set_index('subcuenca')
         tabla_hora.iloc[i] = cuencas_gdf['mean']
+
+        cuencas_gdf_sa['index'] = cuencas_gdf_sa.index
+        cuencas_gdf_sa = pd.concat([cuencas_gdf_sa['index'], df_zonal_stats_sa['mean']], axis=1) 
+        cuencas_gdf_sa = cuencas_gdf_sa.dropna(subset=['mean']).set_index('index')
+        tabla_hora_sa.iloc[i] = cuencas_gdf_sa['mean']
     tabla_hora = tabla_hora.astype(float).round(2)
     tabla_hora.index = tabla_hora.index + datetime.timedelta(hours=-3)
     tabla_hora.to_csv(path)
+
+    tabla_hora_sa = tabla_hora_sa.astype(float).round(2)
+    tabla_hora_sa.index = tabla_hora_sa.index + datetime.timedelta(hours=-3)
+    tabla_hora_sa.to_csv(path_sa)
 
 
 def generar_producto_cuencas(wrfout, outdir_productos, outdir_tabla, configuracion):
@@ -202,7 +222,7 @@ def generar_producto_cuencas(wrfout, outdir_productos, outdir_tabla, configuraci
 
     guardar_tabla(cuencas_gdf_ppn, outdir_tabla, rundate, configuracion)
 
-    generar_tabla_por_hora(cuencas_gdf_ppn, outdir_tabla, rundate, configuracion)
+    generar_tabla_por_hora(outdir_tabla, rundate, configuracion)
 
     # Eliminamos el wrfout que creamos
     os.remove(wrfout + '.nc')
