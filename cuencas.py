@@ -19,6 +19,7 @@ import geopandas as gpd
 import rasterio
 from rasterstats import zonal_stats
 import matplotlib.pyplot as plt
+from matplotlib.colors import LinearSegmentedColormap
 
 def corregir_wrfout(ruta_wrfout):
     xds =  xr.open_dataset(ruta_wrfout)
@@ -137,13 +138,27 @@ def generar_imagen(cuencas_gdf_ppn, outdir, rundate, configuracion):
         os.makedirs(os.path.dirname(path))
     except OSError:
         pass
-    f, ax = plt.subplots(1, figsize=(8, 8), frameon=False)
+    f, ax = plt.subplots(1, figsize=(9, 12), frameon=False)
+    cm_riesgos = LinearSegmentedColormap.from_list(
+        'cmap_name', 
+        [
+            (200/256,255/256,200/256),
+            (255/256,255/256,0/256),
+            (256/256,0,0)
+        ],
+        N=5
+        )
     cuencas_gdf_ppn.dropna(subset=['mean']).plot(column='mean',
-                                                 scheme='fisher_jenks', 
-                                                 k=8,
-                                                 cmap=plt.cm.Blues,
-                                                 legend=True,
+                                                 vmin=0, 
+                                                 vmax=100, 
+                                                 edgecolor='#FFFFFF',
+                                                 linewidth=0.2,
+                                                 cmap=cm_riesgos,
+                                                 legend=False,
                                                  ax=ax)
+    gdf_cba = gpd.read_file('../wrfplot/shapefiles/dep.shp')
+    gdf_cba = gdf_cba[gdf_cba.PROVINCIA == 'CORDOBA']
+    gdf_cba.plot(color='None', edgecolor='#333333', alpha=0.3, linewidth=0.5, ax=ax)
     ax.set_axis_off()
     plt.axis('equal')
     plt.savefig(path, bbox_inches='tight')
@@ -217,11 +232,11 @@ def generar_producto_cuencas(wrfout, outdir_productos, outdir_tabla, configuraci
 
     cuencas_gdf_ppn = integrar_en_cuencas(cuencas_gdf)
 
-    generar_imagen(cuencas_gdf_ppn, outdir_productos, rundate, configuracion)
-
     guardar_tabla(cuencas_gdf_ppn, outdir_tabla, rundate, configuracion)
 
     generar_tabla_por_hora(outdir_tabla, rundate, configuracion)
+    
+    generar_imagen(cuencas_gdf_ppn, outdir_productos, rundate, configuracion)
 
     # Eliminamos el wrfout que creamos
     os.remove(wrfout + '.nc')
