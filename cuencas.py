@@ -175,15 +175,15 @@ def generar_tabla_por_hora(outdir, rundate, configuracion):
                                                      end=(rundate + datetime.timedelta(hours=24+9)), 
                                                      freq='H'))
     tabla_hora.index.name = 'fecha'
-    cuencas_gdf_sa = gpd.read_file('shapefiles/cuencas_sa.shp')
-    tabla_hora_sa = pd.DataFrame(columns=cuencas_gdf_sa.index, 
+    cuencas_gdf_sa = gpd.read_file('shapefiles/cuencas_sa.shp').dropna(subset=['NAME'])
+    tabla_hora_sa = pd.DataFrame(columns=cuencas_gdf_sa.NAME, 
                               index=pd.DatetimeIndex(start=rundate, 
                                                      end=(rundate + datetime.timedelta(hours=24+9)), 
                                                      freq='H'))
     tabla_hora_sa.index.name = 'fecha'
     for i in range(1, len(tabla_hora)):
         cuencas_gdf = gpd.read_file('shapefiles/Cuencas hidrográficas.shp')
-        cuencas_gdf_sa = gpd.read_file('shapefiles/cuencas_sa.shp')
+        cuencas_gdf_sa = gpd.read_file('shapefiles/cuencas_sa.shp').dropna(subset=['NAME'])
         with rasterio.open("geotiff/ppn_" + str(i) + ".tif") as src:
             affine = src.transform
             array = src.read(1)
@@ -191,13 +191,12 @@ def generar_tabla_por_hora(outdir, rundate, configuracion):
             df_zonal_stats_sa = pd.DataFrame(zonal_stats(cuencas_gdf_sa, array, affine=affine, all_touched=True))
 
         cuencas_gdf = cuencas_gdf.rename(columns={'Subcuenca' : 'subcuenca', 'Cuenca' : 'cuenca'})
-        cuencas_gdf = pd.concat([cuencas_gdf['subcuenca'], df_zonal_stats['mean']], axis=1) 
+        cuencas_gdf = pd.concat([cuencas_gdf['subcuenca'], df_zonal_stats['mean']], axis=1)
         cuencas_gdf = cuencas_gdf.dropna(subset=['mean']).set_index('subcuenca')
         tabla_hora.iloc[i] = cuencas_gdf['mean']
 
-        cuencas_gdf_sa['index'] = cuencas_gdf_sa.index
-        cuencas_gdf_sa = pd.concat([cuencas_gdf_sa['index'], df_zonal_stats_sa['mean']], axis=1) 
-        cuencas_gdf_sa = cuencas_gdf_sa.dropna(subset=['mean']).set_index('index')
+        cuencas_gdf_sa = pd.concat([cuencas_gdf_sa['NAME'], df_zonal_stats_sa['mean']], axis=1)
+        cuencas_gdf_sa = cuencas_gdf_sa.dropna(subset=['mean']).set_index('NAME')
         tabla_hora_sa.iloc[i] = cuencas_gdf_sa['mean']
     tabla_hora = tabla_hora.astype(float).round(2)
     tabla_hora.index = tabla_hora.index + datetime.timedelta(hours=-3)
