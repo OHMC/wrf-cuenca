@@ -177,9 +177,12 @@ def guardar_tabla(cuencas_gdf_ppn, outdir, rundate, configuracion):
 
 def generar_tabla_por_hora(outdir, rundate, configuracion):
     path = outdir + rundate.strftime('%Y_%m/%d/cordoba/cuencas/') + 'ppn_por_hora_' + configuracion + '.csv'
-    path_sa = outdir + rundate.strftime('%Y_%m/%d/cordoba/cuencas/') + 'san_antonio/ppn_por_hora_sa_' + configuracion + '.csv'
+    path_sa = outdir + rundate.strftime('%Y_%m/%d/cordoba/cuencas/') + 'san_antonio/ppn_por_hora_sa_' + configuracion + '.csv' # san antonio
+    path_lq = outdir + rundate.strftime('%Y_%m/%d/cordoba/cuencas/') + 'san_antonio/ppn_por_hora_lq_' + configuracion + '.csv' # la quebrada
+
     try:
         os.makedirs(os.path.dirname(path_sa))
+        os.makedirs(os.path.dirname(path_lq))
         os.makedirs(os.path.dirname(path))
     except OSError:
         pass
@@ -190,36 +193,56 @@ def generar_tabla_por_hora(outdir, rundate, configuracion):
                                                      end=(rundate + datetime.timedelta(hours=24+9)), 
                                                      freq='H'))
     tabla_hora.index.name = 'fecha'
+    #cuenca san antonio
     cuencas_gdf_sa = gpd.read_file('shapefiles/cuencas_sa.shp').dropna(subset=['NAME'])
     tabla_hora_sa = pd.DataFrame(columns=cuencas_gdf_sa.NAME, 
                               index=pd.DatetimeIndex(start=rundate, 
                                                      end=(rundate + datetime.timedelta(hours=24+9)), 
                                                      freq='H'))
+
     tabla_hora_sa.index.name = 'fecha'
+    #cuenca la quebrada
+    cuencas_gdf_lq = gpd.read_file('shapefiles/cuenca_lq.shp').dropna(subset=['NAME'])
+    tabla_hora_lq = pd.DataFrame(columns=cuencas_gdf_lq.NAME, 
+                              index=pd.DatetimeIndex(start=rundate, 
+                                                     end=(rundate + datetime.timedelta(hours=24+9)), 
+                                                     freq='H'))
+                                                     
+    tabla_hora_lq.index.name = 'fecha'
     for i in range(1, len(tabla_hora)):
         cuencas_gdf = gpd.read_file('shapefiles/Cuencas hidrográficas.shp')
         cuencas_gdf_sa = gpd.read_file('shapefiles/cuencas_sa.shp').dropna(subset=['NAME'])
+        cuencas_gdf_lq = gpd.read_file('shapefiles/cuencas_lq.shp').dropna(subset=['NAME'])
         with rasterio.open("geotiff/ppn_" + str(i) + ".tif") as src:
             affine = src.transform
             array = src.read(1)
             df_zonal_stats = pd.DataFrame(zonal_stats(cuencas_gdf, array, affine=affine, all_touched=True))
             df_zonal_stats_sa = pd.DataFrame(zonal_stats(cuencas_gdf_sa, array, affine=affine, all_touched=True))
-
+            df_zonal_stats_lq = pd.DataFrame(zonal_stats(cuencas_gdf_lq, array, affine=affine, all_touched=True))
         cuencas_gdf = cuencas_gdf.rename(columns={'Subcuenca' : 'subcuenca', 'Cuenca' : 'cuenca'})
         cuencas_gdf = pd.concat([cuencas_gdf['subcuenca'], df_zonal_stats['mean']], axis=1)
         cuencas_gdf = cuencas_gdf.dropna(subset=['mean']).set_index('subcuenca')
         tabla_hora.iloc[i] = cuencas_gdf['mean']
-
+        # san antonio
         cuencas_gdf_sa = pd.concat([cuencas_gdf_sa['NAME'], df_zonal_stats_sa['mean']], axis=1)
         cuencas_gdf_sa = cuencas_gdf_sa.dropna(subset=['mean']).set_index('NAME')
         tabla_hora_sa.iloc[i] = cuencas_gdf_sa['mean']
+        #la quebrada
+        cuencas_gdf_lq = pd.concat([cuencas_gdf_lq['NAME'], df_zonal_stats_lq['mean']], axis=1)
+        cuencas_gdf_lq = cuencas_gdf_lq.dropna(subset=['mean']).set_index('NAME')
+        tabla_hora_lq.iloc[i] = cuencas_gdf_lq['mean']
     tabla_hora = tabla_hora.astype(float).round(2)
     tabla_hora.index = tabla_hora.index + datetime.timedelta(hours=-3)
     tabla_hora.to_csv(path)
-
+    # san antonio
     tabla_hora_sa = tabla_hora_sa.astype(float).round(2)
     tabla_hora_sa.index = tabla_hora_sa.index + datetime.timedelta(hours=-3)
-    tabla_hora_sa.to_csv(path_sa)
+    tabla_hora_sa.to_csv(path_lq)
+
+    # san antonio
+    tabla_hora_lq = tabla_hora_lq.astype(float).round(2)
+    tabla_hora_lq.index = tabla_hora_lq.index + datetime.timedelta(hours=-3)
+    tabla_hora_lq.to_csv(path_sa)
 
 
 def generar_producto_cuencas(wrfout, outdir_productos, outdir_tabla, configuracion):
