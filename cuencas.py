@@ -212,7 +212,7 @@ def generar_tabla_por_hora(outdir, rundate, configuracion):
     for i in range(1, len(tabla_hora)):
         cuencas_gdf = gpd.read_file('shapefiles/Cuencas hidrográficas.shp')
         cuencas_gdf_sa = gpd.read_file('shapefiles/cuencas_sa.shp').dropna(subset=['NAME'])
-        cuencas_gdf_lq = gpd.read_file('shapefiles/cuencas_lq.shp').dropna(subset=['NAME'])
+        cuencas_gdf_lq = gpd.read_file('shapefiles/cuenca_lq.shp').dropna(subset=['NAME'])
         with rasterio.open("geotiff/ppn_" + str(i) + ".tif") as src:
             affine = src.transform
             array = src.read(1)
