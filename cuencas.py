@@ -178,7 +178,7 @@ def guardar_tabla(cuencas_gdf_ppn, outdir, rundate, configuracion):
 def generar_tabla_por_hora(outdir, rundate, configuracion):
     path = outdir + rundate.strftime('%Y_%m/%d/cordoba/cuencas/') + 'ppn_por_hora_' + configuracion + '.csv'
     path_sa = outdir + rundate.strftime('%Y_%m/%d/cordoba/cuencas/') + 'san_antonio/ppn_por_hora_sa_' + configuracion + '.csv' # san antonio
-    path_lq = outdir + rundate.strftime('%Y_%m/%d/cordoba/cuencas/') + 'san_antonio/ppn_por_hora_lq_' + configuracion + '.csv' # la quebrada
+    path_lq = outdir + rundate.strftime('%Y_%m/%d/cordoba/cuencas/') + 'la_quebrada/ppn_por_hora_lq_' + configuracion + '.csv' # la quebrada
 
     try:
         os.makedirs(os.path.dirname(path_sa))
