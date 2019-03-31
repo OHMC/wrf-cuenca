@@ -237,12 +237,12 @@ def generar_tabla_por_hora(outdir, rundate, configuracion):
     # san antonio
     tabla_hora_sa = tabla_hora_sa.astype(float).round(2)
     tabla_hora_sa.index = tabla_hora_sa.index + datetime.timedelta(hours=-3)
-    tabla_hora_sa.to_csv(path_lq)
+    tabla_hora_sa.to_csv(path_sa)
 
     # san antonio
     tabla_hora_lq = tabla_hora_lq.astype(float).round(2)
     tabla_hora_lq.index = tabla_hora_lq.index + datetime.timedelta(hours=-3)
-    tabla_hora_lq.to_csv(path_sa)
+    tabla_hora_lq.to_csv(path_lq)
 
 
 def generar_producto_cuencas(wrfout, outdir_productos, outdir_tabla, configuracion):
