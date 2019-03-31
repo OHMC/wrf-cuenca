@@ -190,14 +190,14 @@ def generar_tabla_por_hora(outdir, rundate, configuracion):
     cuencas_gdf = cuencas_gdf.rename(columns={'Subcuenca' : 'subcuenca', 'Cuenca' : 'cuenca'})
     tabla_hora = pd.DataFrame(columns=cuencas_gdf.subcuenca, 
                               index=pd.DatetimeIndex(start=rundate, 
-                                                     end=(rundate + datetime.timedelta(hours=24+9)), 
+                                                     end=(rundate + datetime.timedelta(hours=48+9)), 
                                                      freq='H'))
     tabla_hora.index.name = 'fecha'
     #cuenca san antonio
     cuencas_gdf_sa = gpd.read_file('shapefiles/cuencas_sa.shp').dropna(subset=['NAME'])
     tabla_hora_sa = pd.DataFrame(columns=cuencas_gdf_sa.NAME, 
                               index=pd.DatetimeIndex(start=rundate, 
-                                                     end=(rundate + datetime.timedelta(hours=24+9)), 
+                                                     end=(rundate + datetime.timedelta(hours=48+9)), 
                                                      freq='H'))
 
     tabla_hora_sa.index.name = 'fecha'
@@ -205,7 +205,7 @@ def generar_tabla_por_hora(outdir, rundate, configuracion):
     cuencas_gdf_lq = gpd.read_file('shapefiles/cuenca_lq.shp').dropna(subset=['NAME'])
     tabla_hora_lq = pd.DataFrame(columns=cuencas_gdf_lq.NAME, 
                               index=pd.DatetimeIndex(start=rundate, 
-                                                     end=(rundate + datetime.timedelta(hours=24+9)), 
+                                                     end=(rundate + datetime.timedelta(hours=48+9)), 
                                                      freq='H'))
                                                      
     tabla_hora_lq.index.name = 'fecha'
