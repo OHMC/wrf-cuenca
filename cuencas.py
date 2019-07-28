@@ -146,7 +146,7 @@ def generar_imagen(cuencas_gdf_ppn, outdir, rundate, configuracion):
             (255/256,255/256,0/256),
             (256/256,0,0)
         ],
-        N=5
+        N=10
         )
     cuencas_gdf_ppn.dropna(subset=['mean']).plot(column='mean',
                                                  vmin=0, 
