@@ -304,8 +304,8 @@ def generar_producto_cuencas(wrfout, outdir_productos,
     cuencas_gdf_ppn_sa = integrar_en_cuencas(cuencas_sa)
 
     guardar_tabla(cuencas_gdf_ppn, outdir_tabla, rundate, configuracion)
-    guardar_tabla(cuencas_gdf_ppn_lq, outdir_tabla, rundate, configuracion)
-    guardar_tabla(cuencas_gdf_ppn_sa, outdir_tabla, rundate, configuracion)
+#    guardar_tabla(cuencas_gdf_ppn_lq, outdir_tabla, rundate, configuracion)
+#    guardar_tabla(cuencas_gdf_ppn_sa, outdir_tabla, rundate, configuracion)
 
     generar_tabla_por_hora(outdir_tabla, rundate, configuracion)
 
