@@ -300,12 +300,12 @@ def generar_producto_cuencas(wrfout, outdir_productos,
     genear_tif_prec(wrfout + '.nc', out_path='geotiff/ppn')
 
     cuencas_gdf_ppn = integrar_en_cuencas(cuencas_gdf)
-    cuencas_gdf_ppn_lq = integrar_en_cuencas(cuencas_lq)
-    cuencas_gdf_ppn_sa = integrar_en_cuencas(cuencas_sa)
+    # cuencas_gdf_ppn_lq = integrar_en_cuencas(cuencas_lq)
+    # cuencas_gdf_ppn_sa = integrar_en_cuencas(cuencas_sa)
 
     guardar_tabla(cuencas_gdf_ppn, outdir_tabla, rundate, configuracion)
-    guardar_tabla(cuencas_gdf_ppn_lq, outdir_tabla, rundate, configuracion)
-    guardar_tabla(cuencas_gdf_ppn_sa, outdir_tabla, rundate, configuracion)
+    # guardar_tabla(cuencas_gdf_ppn_lq, outdir_tabla, rundate, configuracion)
+    # guardar_tabla(cuencas_gdf_ppn_sa, outdir_tabla, rundate, configuracion)
 
     generar_tabla_por_hora(outdir_tabla, rundate, configuracion)
 
