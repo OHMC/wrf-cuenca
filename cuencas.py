@@ -291,7 +291,7 @@ def generar_tabla_por_hora(outdir, rundate, configuracion):
 def generar_producto_cuencas(wrfout, outdir_productos,
                              outdir_tabla, configuracion):
     # Abrimos DataFrame con las cuentas
-    cuencas_gdf = gpd.read_file('shapefiles/Cuencas hidrográficas.shp')
+    cuencas_gdf = gpd.read_file('shapefiles/cuencas.shp')
     # cuencas_lq = gpd.read_file('shapefiles/cuenca_lq.shp')
     # cuencas_sa = gpd.read_file('shapefiles/cuencas_sa.shp')
 
