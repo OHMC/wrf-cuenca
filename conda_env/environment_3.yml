@@ -7,7 +7,9 @@ dependencies:
   - affine=2.3.0=py_0
   - appdirs=1.4.3=py_1
   - attrs=19.3.0=py_0
+  - bokeh=2.0.1=py38h32f6830_0
   - boost-cpp=1.72.0=h8e57a91_0
+  - bottleneck=1.3.2=py38h8790de6_1
   - brotlipy=0.7.0=py38h1e0a361_1000
   - bzip2=1.0.8=h516909a_2
   - ca-certificates=2020.4.5.1=hecc5488_0
@@ -20,13 +22,19 @@ dependencies:
   - click=7.1.2=pyh9f0ad1d_0
   - click-plugins=1.1.1=py_0
   - cligj=0.5.0=py_0
+  - cloudpickle=1.4.1=py_0
   - cryptography=2.9.2=py38h766eaa4_0
   - curl=7.69.1=h33f0ec9_0
+  - cytoolz=0.10.1=py38h516909a_0
+  - dask=2.16.0=py_0
+  - dask-core=2.16.0=py_0
+  - distributed=2.16.0=py38h32f6830_0
   - expat=2.2.9=he1b5a44_2
   - fiona=1.8.13=py38h033e0f6_1
   - fontconfig=2.13.1=h86ecdb6_1001
   - freetype=2.10.2=he06d7ca_0
   - freexl=1.0.5=h14c3975_1002
+  - fsspec=0.7.4=py_0
   - gazar=0.0.4=py_1
   - gdal=3.0.4=py38h172510d_10
   - geopandas=0.7.0=py_1
@@ -36,8 +44,10 @@ dependencies:
   - glib=2.63.1=h3eb4bd4_1
   - hdf4=4.2.13=hf30be14_1003
   - hdf5=1.10.6=nompi_h3c11f04_100
+  - heapdict=1.0.1=py_0
   - icu=64.2=he1b5a44_1
   - idna=2.9=py_1
+  - jinja2=2.11.2=pyh9f0ad1d_0
   - jpeg=9c=h14c3975_1001
   - json-c=0.13.1=hbfbb72e_1002
   - kealib=1.4.13=h33137a7_1
@@ -68,23 +78,31 @@ dependencies:
   - libwebp-base=1.1.0=h516909a_3
   - libxcb=1.13=h14c3975_1002
   - libxml2=2.9.10=hee79883_0
+  - locket=0.2.0=py_2
   - lz4-c=1.9.2=he1b5a44_1
   - mapkit=1.2.6=py_1
+  - markupsafe=1.1.1=py38h1e0a361_1
+  - msgpack-python=1.0.0=py38hbf85e49_1
   - munch=2.5.0=py_0
   - ncurses=6.2=he6710b0_1
   - netcdf4=1.5.3=nompi_py38hfd55d45_105
   - numpy=1.18.4=py38h8854b6b_0
+  - olefile=0.46=py_0
   - openjpeg=2.3.1=h981e76c_3
   - openssl=1.1.1g=h516909a_0
+  - packaging=20.4=pyh9f0ad1d_0
   - pandas=1.0.3=py38hcb8c335_1
   - pangaea=0.0.4=py38_2
+  - partd=1.1.0=py_0
   - pcre=8.44=he1b5a44_0
+  - pillow=7.1.2=py38hb39fc2d_0
   - pip=20.0.2=py38_3
   - pixman=0.38.0=h516909a_1003
   - poppler=0.87.0=h4190859_1
   - poppler-data=0.4.9=1
   - postgresql=12.2=h8573dbc_1
   - proj=7.0.0=h966b41f_4
+  - psutil=5.7.0=py38h1e0a361_1
   - pthread-stubs=0.4=h14c3975_1001
   - pycparser=2.20=py_0
   - pyopenssl=19.1.0=py_1
@@ -95,6 +113,7 @@ dependencies:
   - python-dateutil=2.8.1=py_0
   - python_abi=3.8=1_cp38
   - pytz=2020.1=pyh9f0ad1d_0
+  - pyyaml=5.3.1=py38h1e0a361_0
   - rasterio=1.1.4=py38h033e0f6_0
   - rasterstats=0.14.0=py_0
   - readline=8.0=h7b6447c_0
@@ -105,11 +124,16 @@ dependencies:
   - simplejson=3.17.0=py38h1e0a361_1
   - six=1.15.0=pyh9f0ad1d_0
   - snuggs=1.4.7=py_0
+  - sortedcontainers=2.1.0=py_0
   - sqlalchemy=1.3.17=py38h1e0a361_0
   - sqlite=3.31.1=h62c20be_1
   - tbb=2018.0.5=h6bb024c_0
+  - tblib=1.6.0=py_0
   - tiledb=1.7.7=h8efa9f0_1
   - tk=8.6.8=hbc83047_0
+  - toolz=0.10.0=py_0
+  - tornado=6.0.4=py38h1e0a361_1
+  - typing_extensions=3.7.4.2=py_0
   - tzcode=2020a=h516909a_0
   - urllib3=1.25.9=py_0
   - utm=0.5.0=py_0
@@ -130,6 +154,8 @@ dependencies:
   - xorg-xextproto=7.3.0=h14c3975_1002
   - xorg-xproto=7.0.31=h14c3975_1007
   - xz=5.2.5=h7b6447c_0
+  - yaml=0.2.4=h516909a_0
+  - zict=2.0.0=py_0
   - zlib=1.2.11=h7b6447c_3
   - zstd=1.4.4=h6597ccf_3
   - pip:
