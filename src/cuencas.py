@@ -1,21 +1,20 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
-"""
-
-"""
-import os
 import datetime
+import os
+
 from optparse import OptionParser
-import xarray as xr
-import numpy as np
-import pangaea as pa
-import pandas as pd
+
 import geopandas as gpd
-import rasterio
-from rasterstats import zonal_stats
 import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import pangaea as pa
+import rasterio
+import xarray as xr
+
+from gazar.grid import ArrayGrid
 from matplotlib.colors import LinearSegmentedColormap
+
+from rasterstats import zonal_stats
 
 
 def corregir_wrfout(ruta_wrfout):
@@ -69,7 +68,6 @@ def to_projection(plsm, variable, projection=None):
         projection.ImportFromProj4("+proj=longlat +ellps=WGS84 +datum=WGS84 \
                                     +no_defs")
     new_data = []
-    from gazar.grid import ArrayGrid
     for band in range(plsm._obj.dims[plsm.time_dim]):
         ar_gd = ArrayGrid(in_array=plsm._obj[variable][band].values[::-1, :],
                           wkt_projection=plsm.projection.ExportToWkt(),
@@ -82,7 +80,6 @@ def to_projection(plsm, variable, projection=None):
 
 
 def guardar_tif(vari, arr, out_path):
-    import rasterio
     nw_ds = rasterio.open(out_path, 'w', driver='GTiff',
                           height=arr.shape[0],
                           width=arr.shape[1],
@@ -123,8 +120,8 @@ def genear_tif_prec(ruta_wrfout, out_path=None):
         arrs[t] = rainnc.RAINNC[t].values[:, :] + rainc.RAINC[t].values[:, :]
         arrs[t][arrs[t] == 0] = np.nan
     for t in range(1, len(plsm.coords['time'])):
-        guardar_tif(rainnc, arrs[t] - arrs[t-1], out_path + '_' + str(t)
-                                                          + '.tif')
+        guardar_tif(rainnc, arrs[t] - arrs[t - 1], out_path + '_' + str(t)
+                    + '.tif')
     guardar_tif(rainnc, arrs[33] - arrs[9], out_path + '.tif')
     plsm.close()
 
@@ -134,7 +131,7 @@ def integrar_en_cuencas(cuencas_gdf):
         affine = src.transform
         array = src.read(1)
         df_zonal_stats = pd.DataFrame(zonal_stats(cuencas_gdf, array,
-                                      affine=affine, all_touched=True))
+                                                  affine=affine, all_touched=True))
 
     cuencas_gdf_ppn = pd.concat([cuencas_gdf, df_zonal_stats], axis=1)
     cuencas_gdf_ppn = cuencas_gdf_ppn.dropna(subset=['mean'])
@@ -157,12 +154,12 @@ def generar_imagen(cuencas_gdf_ppn, outdir, rundate, configuracion):
     cm_riesgos = LinearSegmentedColormap.from_list(
         'cmap_name',
         [
-            (200/256, 255/256, 200/256),
-            (255/256, 255/256, 0/256),
-            (256/256, 0, 0)
+            (200 / 256, 255 / 256, 200 / 256),
+            (255 / 256, 255 / 256, 0 / 256),
+            (256 / 256, 0, 0)
         ],
         N=10
-        )
+    )
     cuencas_gdf_ppn.dropna(subset=['mean']).plot(column='mean',
                                                  vmin=0,
                                                  vmax=100,
@@ -201,7 +198,7 @@ def generar_tabla_por_hora(outdir, rundate, configuracion):
                + configuracion + '.csv')  # san antonio
     path_lq = (outdir + rundate.strftime('%Y_%m/%d/cordoba/cuencas/')
                + 'la_quebrada/ppn_por_hora_lq_'
-               + configuracion + '.csv')   # la quebrada
+               + configuracion + '.csv')  # la quebrada
 
     try:
         os.makedirs(os.path.dirname(path_sa))
@@ -216,7 +213,7 @@ def generar_tabla_por_hora(outdir, rundate, configuracion):
                               index=pd.DatetimeIndex(start=rundate,
                                                      end=(rundate
                                                           + datetime.timedelta(
-                                                            hours=48+9)),
+                                                                 hours=48 + 9)),
                                                      freq='H'))
     tabla_hora.index.name = 'fecha'
     # cuenca san antonio
@@ -226,7 +223,7 @@ def generar_tabla_por_hora(outdir, rundate, configuracion):
                                  index=pd.DatetimeIndex(start=rundate,
                                                         end=(rundate
                                                              + datetime.timedelta(
-                                                               hours=48+9)),
+                                                                    hours=48 + 9)),
                                                         freq='H'))
 
     tabla_hora_sa.index.name = 'fecha'
@@ -236,43 +233,43 @@ def generar_tabla_por_hora(outdir, rundate, configuracion):
     tabla_hora_lq = pd.DataFrame(columns=cuencas_gdf_lq.NAME,
                                  index=pd.DatetimeIndex(start=rundate,
                                                         end=(rundate
-                                                             + datetime.timedelta(hours=48+9)),
+                                                             + datetime.timedelta(hours=48 + 9)),
                                                         freq='H'))
 
     tabla_hora_lq.index.name = 'fecha'
     for i in range(1, len(tabla_hora)):
         cuencas_gdf = gpd.read_file('shapefiles/Cuencas hidrográficas.shp')
         cuencas_gdf_sa = gpd.read_file('shapefiles/cuencas_sa.shp').dropna(
-                             subset=['NAME'])
+            subset=['NAME'])
         cuencas_gdf_lq = gpd.read_file('shapefiles/cuenca_lq.shp').dropna(
-                             subset=['NAME'])
+            subset=['NAME'])
         with rasterio.open("geotiff/ppn_" + str(i) + ".tif") as src:
             affine = src.transform
             array = src.read(1)
             df_zonal_stats = pd.DataFrame(zonal_stats(cuencas_gdf, array,
-                                          affine=affine, all_touched=True))
+                                                      affine=affine, all_touched=True))
             df_zonal_stats_sa = pd.DataFrame(zonal_stats(cuencas_gdf_sa, array,
-                                             affine=affine, all_touched=True))
+                                                         affine=affine, all_touched=True))
             df_zonal_stats_lq = pd.DataFrame(zonal_stats(cuencas_gdf_lq, array,
-                                             affine=affine, all_touched=True))
+                                                         affine=affine, all_touched=True))
         cuencas_gdf = cuencas_gdf.rename(columns={'Subcuenca': 'subcuenca',
                                                   'Cuenca': 'cuenca'})
         cuencas_gdf = pd.concat([cuencas_gdf['subcuenca'],
                                  df_zonal_stats['mean']], axis=1)
         cuencas_gdf = cuencas_gdf.dropna(subset=['mean']).set_index(
-                                  'subcuenca')
+            'subcuenca')
         tabla_hora.iloc[i] = cuencas_gdf['mean']
         # san antonio
         cuencas_gdf_sa = pd.concat([cuencas_gdf_sa['NAME'],
-                                   df_zonal_stats_sa['mean']], axis=1)
+                                    df_zonal_stats_sa['mean']], axis=1)
         cuencas_gdf_sa = cuencas_gdf_sa.dropna(subset=['mean']).set_index(
-                                        'NAME')
+            'NAME')
         tabla_hora_sa.iloc[i] = cuencas_gdf_sa['mean']
         # la quebrada
         cuencas_gdf_lq = pd.concat([cuencas_gdf_lq['NAME'],
                                     df_zonal_stats_lq['mean']], axis=1)
         cuencas_gdf_lq = cuencas_gdf_lq.dropna(subset=['mean']).set_index(
-                                        'NAME')
+            'NAME')
         tabla_hora_lq.iloc[i] = cuencas_gdf_lq['mean']
     tabla_hora = tabla_hora.astype(float).round(2)
     tabla_hora.index = tabla_hora.index + datetime.timedelta(hours=-3)
@@ -304,8 +301,8 @@ def generar_producto_cuencas(wrfout, outdir_productos,
     # cuencas_gdf_ppn_sa = integrar_en_cuencas(cuencas_sa)
 
     guardar_tabla(cuencas_gdf_ppn, outdir_tabla, rundate, configuracion)
-#    guardar_tabla(cuencas_gdf_ppn_lq, outdir_tabla, rundate, configuracion)
-#    guardar_tabla(cuencas_gdf_ppn_sa, outdir_tabla, rundate, configuracion)
+    #    guardar_tabla(cuencas_gdf_ppn_lq, outdir_tabla, rundate, configuracion)
+    #    guardar_tabla(cuencas_gdf_ppn_sa, outdir_tabla, rundate, configuracion)
 
     generar_tabla_por_hora(outdir_tabla, rundate, configuracion)
 
@@ -330,7 +327,7 @@ def main():
 
     (opts, args) = parser.parse_args()
     if not opts.wrfout or not opts.outdir_tabla or not opts.outdir_productos \
-       or not opts.configuracion:
+            or not opts.configuracion:
         print("Faltan parametros!")
         print(usage)
     else:
