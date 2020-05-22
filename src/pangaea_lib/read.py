@@ -20,7 +20,7 @@ def open_mfdataset(path_to_lsm_files,
                    coords_projected=False,
                    loader=None,
                    engine=None,
-                   autoclose=True):
+                   autoclose=True) -> xr.Dataset:
     """
     Wrapper to open land surface model netcdf files
     using :func:`xarray.open_mfdataset`.
@@ -58,11 +58,6 @@ def open_mfdataset(path_to_lsm_files,
     autoclose: :obj:`str`, optional, default=True
         If True, will use autoclose option with
         :func:`xarray.open_mfdataset`.
-
-    Returns
-    -------
-    :func:`xarray.Dataset`
-
 
     Read with pangaea example::
 

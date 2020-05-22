@@ -9,8 +9,7 @@ import numpy as np
 from osgeo import osr, gdalconst
 import pandas as pd
 from pyproj import Proj, transform
-from gazar.grid import (geotransform_from_yx, resample_grid,
-                        utm_proj_from_latlon, ArrayGrid)
+from gazar.grid import geotransform_from_yx, resample_grid, utm_proj_from_latlon, ArrayGrid
 import wrf
 import xarray as xr
 
@@ -358,6 +357,7 @@ class LSMGridReader(object):
                 You can also pass the path to the grid.
         """
         new_data = []
+        resampled_data_grid = None
         for band in range(self._obj.dims[self.time_dim]):
             data = self._obj[variable][band].values
             arr_grid = ArrayGrid(in_array=data,
@@ -369,8 +369,7 @@ class LSMGridReader(object):
             new_data.append(resampled_data_grid.np_array())
 
         self.to_datetime()
-        return self._export_dataset(variable, np.array(new_data),
-                                    resampled_data_grid)
+        return self._export_dataset(variable, np.array(new_data), resampled_data_grid)
 
     def _getvar(self, variable, yslice, xslice):
         """Get the variable either directly or calculated"""
@@ -381,16 +380,16 @@ class LSMGridReader(object):
         #    except AttributeError:
         #        nc_file = self._obj._file_obj.file_objs
         #    var = wrf.getvar(nc_file, variable)
-        def extract_slice(var, slice_arr):
+        def extract_slice(_var, slice_arr):
             """extract by slice"""
-            if var.ndim == 4:
-                var = var[slice_arr[0], slice_arr[1],
-                          slice_arr[2], slice_arr[3]]
-            if var.ndim == 3:
-                var = var[slice_arr[0], slice_arr[1], slice_arr[2]]
+            if _var.ndim == 4:
+                _var = _var[slice_arr[0], slice_arr[1],
+                            slice_arr[2], slice_arr[3]]
+            if _var.ndim == 3:
+                _var = _var[slice_arr[0], slice_arr[1], slice_arr[2]]
             else:
-                var = var[slice_arr[0], slice_arr[1]]
-            return var
+                _var = _var[slice_arr[0], slice_arr[1]]
+            return _var
 
         var = self._obj[variable]
         slc = [slice(None)] * var.ndim
@@ -459,6 +458,7 @@ class LSMGridReader(object):
             :func:`xarray.Dataset`
         """
         new_data = []
+        ggrid = None
         for band in range(self._obj.dims[self.time_dim]):
             arr_grid = ArrayGrid(in_array=self._obj[variable][band].values,
                                  wkt_projection=self.projection.ExportToWkt(),
@@ -467,8 +467,7 @@ class LSMGridReader(object):
             new_data.append(ggrid.np_array())
 
         self.to_datetime()
-        return self._export_dataset(variable, np.array(new_data),
-                                    ggrid)
+        return self._export_dataset(variable, np.array(new_data), ggrid)
 
     def to_utm(self, variable):
         """Convert Grid to UTM projection at center of grid.

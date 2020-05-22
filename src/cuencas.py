@@ -6,6 +6,7 @@ from optparse import OptionParser
 import geopandas as gpd
 import matplotlib.pyplot as plt
 import numpy as np
+import xarray
 import pandas as pd
 import pangaea_lib as pa
 import rasterio
@@ -37,15 +38,16 @@ def corregir_wrfout(ruta_wrfout):
     return rundate
 
 
-def abrir_plsm(ruta_wrfout):
-    plsm = pa.open_mfdataset(ruta_wrfout,
-                             lat_var='XLAT',
-                             lon_var='XLONG',
-                             time_var='XTIME',
-                             lat_dim='south_north',
-                             lon_dim='west_east',
-                             time_dim='Time')
-    return plsm
+def abrir_plsm(ruta_wrfout) -> xarray.Dataset:
+    return pa.open_mfdataset(
+        ruta_wrfout,
+        lat_var='XLAT',
+        lon_var='XLONG',
+        time_var='XTIME',
+        lat_dim='south_north',
+        lon_dim='west_east',
+        time_dim='Time'
+    )
 
 
 def to_projection(plsm, variable, projection=None):
@@ -97,7 +99,7 @@ def convertir_variable(plsm, variable):
 
 
 def genear_tif(ruta_wrfout, variable, time_idx, out_path):
-    plsm = abrir_plsm(ruta_wrfout)
+    plsm: xarray.Dataset = abrir_plsm(ruta_wrfout)
     vari = convertir_variable(plsm, variable)
     arr = vari[variable][time_idx].values[:, :]
     arr[arr == 0] = np.nan
@@ -207,18 +209,24 @@ def generar_tabla_por_hora(outdir, rundate, configuracion):
     cuencas_gdf = gpd.read_file('shapefiles/Cuencas hidrográficas.shp')
     cuencas_gdf = cuencas_gdf.rename(columns={'Subcuenca': 'subcuenca',
                                               'Cuenca': 'cuenca'})
-    tabla_hora = pd.DataFrame(columns=cuencas_gdf.subcuenca, index=pd.DatetimeIndex(start=rundate, end=(rundate + datetime.timedelta(hours=48 + 9)), freq='H'))
+    tabla_hora = pd.DataFrame(columns=cuencas_gdf.subcuenca,
+                              index=pd.DatetimeIndex(start=rundate, end=(rundate + datetime.timedelta(hours=48 + 9)),
+                                                     freq='H'))
     tabla_hora.index.name = 'fecha'
     # cuenca san antonio
     cuencas_gdf_sa = gpd.read_file('shapefiles/cuencas_sa.shp').dropna(
         subset=['NAME'])
-    tabla_hora_sa = pd.DataFrame(columns=cuencas_gdf_sa.NAME, index=pd.DatetimeIndex(start=rundate, end=(rundate + datetime.timedelta(hours=48 + 9)), freq='H'))
+    tabla_hora_sa = pd.DataFrame(columns=cuencas_gdf_sa.NAME,
+                                 index=pd.DatetimeIndex(start=rundate, end=(rundate + datetime.timedelta(hours=48 + 9)),
+                                                        freq='H'))
 
     tabla_hora_sa.index.name = 'fecha'
     # cuenca la quebrada
     cuencas_gdf_lq = gpd.read_file('shapefiles/cuenca_lq.shp').dropna(
         subset=['NAME'])
-    tabla_hora_lq = pd.DataFrame(columns=cuencas_gdf_lq.NAME, index=pd.DatetimeIndex(start=rundate, end=(rundate + datetime.timedelta(hours=48 + 9)), freq='H'))
+    tabla_hora_lq = pd.DataFrame(columns=cuencas_gdf_lq.NAME,
+                                 index=pd.DatetimeIndex(start=rundate, end=(rundate + datetime.timedelta(hours=48 + 9)),
+                                                        freq='H'))
 
     tabla_hora_lq.index.name = 'fecha'
     for i in range(1, len(tabla_hora)):
