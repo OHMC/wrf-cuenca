@@ -1,31 +1,29 @@
+import argparse
 import datetime
-import logging
 import os
-
-from optparse import OptionParser
+import time
 
 import geopandas as gpd
 import matplotlib.pyplot as plt
 import numpy as np
-import xarray
-import wrf
-import netCDF4
 import pandas as pd
-import pangaea_lib as pa
 import rasterio
+import xarray
 import xarray as xr
 from gazar.grid import ArrayGrid
 from matplotlib.colors import LinearSegmentedColormap
-from rasterstats import zonal_stats
 from osgeo import osr, gdalconst
+from rasterstats import zonal_stats
 
+import pangaea_lib as pa
+from config.constants import PROG_VERSION
 from config.logging_conf import CUENCAS_LOGGER_NAME, get_logger_from_config_file
 
 logger = get_logger_from_config_file(CUENCAS_LOGGER_NAME)
+pa.register()  # Solo para utilizar el import y que se registre el accessor en xarray
 
 
-# noinspection DuplicatedCode
-def corregir_wrfout(ruta_wrfout) -> (datetime.datetime, xarray.Dataset):
+def corregir_wrfout(ruta_wrfout: str) -> (datetime.datetime, xarray.Dataset):
     """Fixes variables dimensions
         Parameters
         ----------
@@ -42,34 +40,31 @@ def corregir_wrfout(ruta_wrfout) -> (datetime.datetime, xarray.Dataset):
     return rundate, xds
 
 
-def to_projection(_plsm, variable):
+def to_projection(_plsm, variable) -> xr.Dataset:
     """Convert Grid to New Projection.
         Parameters
         ----------
         _plsm
         variable: :obj:`str`
             Name of variable in dataset.
-        Returns
-        -------
-        :func:`xarray.Dataset`
     """
     projection = osr.SpatialReference()
     projection.ImportFromProj4("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs")
 
     new_data = []
     ggrid = None
-    for band in range(_plsm._obj.dims[_plsm.time_dim]):
-        ar_gd = ArrayGrid(in_array=_plsm._obj[variable][band].values[::-1, :],
+    for band in range(_plsm.xarr_obj.dims[_plsm.time_dim]):
+        ar_gd = ArrayGrid(in_array=_plsm.xarr_obj[variable][band].values[::-1, :],
                           wkt_projection=_plsm.projection.ExportToWkt(),
                           geotransform=_plsm.geotransform)
         ggrid = ar_gd.to_projection(projection, gdalconst.GRA_Average)
         new_data.append(ggrid.np_array())
 
     _plsm.to_datetime()
-    return _plsm._export_dataset(variable, np.array(new_data), ggrid)
+    return _plsm.export_dataset(variable, np.array(new_data), ggrid)
 
 
-def guardar_tif(vari, arr, out_path):
+def guardar_tif(vari: xr.Dataset, arr: np.ndarray, out_path: str):
     nw_ds = rasterio.open(out_path, 'w', driver='GTiff',
                           height=arr.shape[0],
                           width=arr.shape[1],
@@ -80,17 +75,15 @@ def guardar_tif(vari, arr, out_path):
     nw_ds.close()
 
 
-def convertir_variable(plsm, variable):
+def convertir_variable(plsm: xr.Dataset, variable: str) -> xr.Dataset:
     vari = to_projection(plsm.lsm, variable)
-    # vari = to_projection(plsm.lsm, variable)
     vari['lat'] = vari['lat'].sel(x=1)
     vari['lon'] = vari['lon'].sel(y=1)
     vari = vari.rename({'lat': 'y', 'lon': 'x'})
     return vari
 
 
-# noinspection DuplicatedCode
-def genear_tif_prec(plsm, out_path=None):
+def genear_tif_prec(plsm: xr.Dataset, out_path: str = None):
     if out_path is None:
         out_path = f"geotiff/ppn_{plsm.START_DATE[:-6]}"
     plsm.variables['RAINNC'].values = plsm.variables['RAINNC'].values + 1000
@@ -106,7 +99,8 @@ def genear_tif_prec(plsm, out_path=None):
     guardar_tif(rainnc, arrs[33] - arrs[9], f"{out_path}.tif")
 
 
-def integrar_en_cuencas(cuencas_gdf, cuencas_shp):
+def integrar_en_cuencas(cuencas_shp: str) -> gpd.GeoDataFrame:
+    cuencas_gdf: gpd.GeoDataFrame = gpd.read_file(cuencas_shp)
     df_zonal_stats = pd.DataFrame(zonal_stats(cuencas_shp, "geotiff/ppn.tif"))
 
     cuencas_gdf_ppn = pd.concat([cuencas_gdf, df_zonal_stats], axis=1)
@@ -115,7 +109,7 @@ def integrar_en_cuencas(cuencas_gdf, cuencas_shp):
     return cuencas_gdf_ppn[['subcuenca', 'cuenca', 'geometry', 'count', 'max', 'mean', 'min']]
 
 
-def generar_imagen(cuencas_gdf_ppn, outdir, rundate, configuracion):
+def generar_imagen(cuencas_gdf_ppn: gpd.GeoDataFrame, outdir: str, rundate: datetime.datetime, configuracion: str):
     path = (outdir + rundate.strftime('%Y_%m/%d/') + 'cuencas_' + configuracion + '.png')
     try:
         os.makedirs(os.path.dirname(path))
@@ -149,7 +143,7 @@ def generar_imagen(cuencas_gdf_ppn, outdir, rundate, configuracion):
     plt.savefig(path, bbox_inches='tight')
 
 
-def guardar_tabla(cuencas_gdf_ppn, outdir, rundate, configuracion):
+def guardar_tabla(cuencas_gdf_ppn: gpd.GeoDataFrame, outdir: str, rundate: datetime.datetime, configuracion: str):
     path = f"{outdir}{rundate.strftime('%Y_%m/%d/cordoba/')}cuencas_{configuracion}.csv"
     try:
         os.makedirs(os.path.dirname(path))
@@ -160,7 +154,7 @@ def guardar_tabla(cuencas_gdf_ppn, outdir, rundate, configuracion):
     cuencas_gdf_ppn.to_csv(path, index=False, mode='a')
 
 
-def generar_tabla_por_hora(outdir, rundate, configuracion):
+def generar_tabla_por_hora(outdir: str, rundate: datetime.datetime, configuracion: str):
     path = (outdir + rundate.strftime('%Y_%m/%d/cordoba/cuencas/') + 'ppn_por_hora_' + configuracion + '.csv')
     path_sa = (outdir + rundate.strftime('%Y_%m/%d/cordoba/cuencas/') + 'san_antonio/ppn_por_hora_sa_'
                + configuracion + '.csv')  # san antonio
@@ -194,12 +188,11 @@ def generar_tabla_por_hora(outdir, rundate, configuracion):
         cuencas_gdf = gpd.read_file('shapefiles/Cuencas hidrográficas.shp')
         cuencas_gdf_sa = gpd.read_file('shapefiles/cuencas_sa.shp').dropna(subset=['NAME'])
         cuencas_gdf_lq = gpd.read_file('shapefiles/cuenca_lq.shp').dropna(subset=['NAME'])
-        with rasterio.open("geotiff/ppn_" + str(i) + ".tif") as src:
-            affine = src.transform
-            array = src.read(1)
-            df_zonal_stats = pd.DataFrame(zonal_stats(cuencas_gdf, array, affine=affine, all_touched=True))
-            df_zonal_stats_sa = pd.DataFrame(zonal_stats(cuencas_gdf_sa, array, affine=affine, all_touched=True))
-            df_zonal_stats_lq = pd.DataFrame(zonal_stats(cuencas_gdf_lq, array, affine=affine, all_touched=True))
+        # ToDo: Revisar
+        df_zonal_stats = pd.DataFrame(zonal_stats(cuencas_gdf, f"geotiff/ppn_{i}.tif"))
+        df_zonal_stats_sa = pd.DataFrame(zonal_stats(cuencas_gdf_sa, f"geotiff/ppn_{i}.tif"))
+        df_zonal_stats_lq = pd.DataFrame(zonal_stats(cuencas_gdf_lq, f"geotiff/ppn_{i}.tif"))
+
         cuencas_gdf = cuencas_gdf.rename(columns={'Subcuenca': 'subcuenca', 'Cuenca': 'cuenca'})
         cuencas_gdf = pd.concat([cuencas_gdf['subcuenca'], df_zonal_stats['mean']], axis=1)
         cuencas_gdf = cuencas_gdf.dropna(subset=['mean']).set_index('subcuenca')
@@ -227,49 +220,40 @@ def generar_tabla_por_hora(outdir, rundate, configuracion):
 
 
 def generar_producto_cuencas(wrfout, outdir_productos, outdir_tabla, configuracion):
-    nc = netCDF4.Dataset(wrfout)
     rundate, xds = corregir_wrfout(wrfout)
-    xds.lsm.rainc = wrf.getvar(nc, 'RAINC', timeidx=wrf.ALL_TIMES)
-    xds.lsm.rainnc = wrf.getvar(nc, 'RAINNC', timeidx=wrf.ALL_TIMES)
+    # nc = netCDF4.Dataset(wrfout)
+    # xds.lsm.rainc = wrf.getvar(nc, 'RAINC', timeidx=wrf.ALL_TIMES)
+    # xds.lsm.rainnc = wrf.getvar(nc, 'RAINNC', timeidx=wrf.ALL_TIMES)
 
     genear_tif_prec(xds, out_path='geotiff/ppn')
     xds.close()
-    nc.close()
-
-    cuencas_gdf: gpd.GeoDataFrame = gpd.read_file('shapefiles/cuencas.shp')
-    cuencas_gdf_ppn = integrar_en_cuencas(cuencas_gdf, 'shapefiles/cuencas.shp')
-
+    # nc.close()
+    start = time.time()
+    cuencas_gdf_ppn: gpd.GeoDataFrame = integrar_en_cuencas('shapefiles/cuencas.shp')
+    print(f"Tiempo integrar_en_cuencas = {time.time() - start}")
+    start = time.time()
     guardar_tabla(cuencas_gdf_ppn, outdir_tabla, rundate, configuracion)
-
+    print(f"Tiempo guardar_tabla = {time.time() - start}")
+    start = time.time()
     generar_tabla_por_hora(outdir_tabla, rundate, configuracion)
+    print(f"Tiempo generar_tabla_por_hora = {time.time() - start}")
 
+    start = time.time()
     generar_imagen(cuencas_gdf_ppn, outdir_productos, rundate, configuracion)
+    print(f"Tiempo generar_imagen = {time.time() - start}")
 
 
 def main():
-    usage = """cuencas.py [--wrfout=pathToDatosWRF] [--outdir_productos=..]
-            [--outdir_tabla ..] [--configuracion ..]"""
-    parser = OptionParser(usage)
-    parser.add_option("--wrfout", dest="wrfout",
-                      help="ruta al wrfout de la salida del WRF")
-    parser.add_option("--outdir_productos", dest="outdir_productos",
-                      help="ruta donde se guardan los productos")
-    parser.add_option("--outdir_tabla", dest="outdir_tabla",
-                      help="ruta donde se guardan las tablas de datos")
-    parser.add_option("--configuracion", dest="configuracion",
-                      help="configuracion de las parametrizaciones")
+    parser = argparse.ArgumentParser(prog="WRF Cuencas")
+    parser.add_argument("wrfout", help="ruta al wrfout de la salida del WRF")
+    parser.add_argument("outdir_productos", help="ruta donde se guardan los productos")
+    parser.add_argument("outdir_tabla", help="ruta donde se guardan las tablas de datos")
+    parser.add_argument("configuracion", help="configuracion de las parametrizaciones")
+    parser.add_argument('-v', '--version', action='version', version=f'%(prog)s {PROG_VERSION}')
 
-    (opts, args) = parser.parse_args()
-    if not opts.wrfout or not opts.outdir_tabla or not opts.outdir_productos \
-            or not opts.configuracion:
-        print("Faltan parametros!")
-        print(usage)
-    else:
-        wrfout = opts.wrfout
-        outdir_tabla = opts.outdir_tabla
-        outdir_productos = opts.outdir_productos
-        configuracion = opts.configuracion
-        generar_producto_cuencas(wrfout, outdir_productos, outdir_tabla, configuracion)
+    args = parser.parse_args()
+
+    generar_producto_cuencas(args.wrfout, args.outdir_productos, args.outdir_tabla, args.configuracion)
 
 
 if __name__ == "__main__":

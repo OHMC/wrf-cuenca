@@ -5,5 +5,5 @@ OUTDIR_TABLA="temp/tablas/"
 CONFIGURACION="CBA_A_06"
 
 
-python cuencas.py --wrfout ${WRFOUT} --outdir_productos ${OUTDIR_PRODUCTOS}  --outdir_tabla ${OUTDIR_TABLA} --configuracion ${CONFIGURACION}
+python cuencas_wrf.py ${WRFOUT} ${OUTDIR_PRODUCTOS} ${OUTDIR_TABLA} ${CONFIGURACION}
 

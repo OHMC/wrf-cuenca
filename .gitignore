@@ -135,4 +135,4 @@ dmypy.json
 #**/ipython_preload_*.py
 #**/*_test*.py
 **/test_*.sh
-**/geotiff/
+**/geotiff/*.tif

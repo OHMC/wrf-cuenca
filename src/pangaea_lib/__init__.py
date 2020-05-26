@@ -1,2 +1,1 @@
-from .xlsm import LSMGridReader
-from .read import open_mfdataset
+from .xlsm import LSMGridReader, register
