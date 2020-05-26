@@ -8,6 +8,7 @@ import yaml
 BASE_LOG_PATH = 'logs'
 LOGGING_CONFIG_FILE = os.getenv('LOG_CFG', 'config/cuencas_logging_conf.yml')
 CUENCAS_LOGGER_NAME = 'cuencas'
+INGESTOR_LOGGER_NAME = 'ingestor'
 
 
 def get_logger_from_config_file(logger_name: str) -> logging.Logger:

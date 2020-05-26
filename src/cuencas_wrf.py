@@ -168,8 +168,7 @@ def generar_tabla_por_hora(outdir: str, rundate: datetime.datetime, configuracio
     except OSError:
         pass
     cuencas_gdf = gpd.read_file('shapefiles/Cuencas hidrográficas.shp')
-    cuencas_gdf = cuencas_gdf.rename(columns={'Subcuenca': 'subcuenca',
-                                              'Cuenca': 'cuenca'})
+    cuencas_gdf = cuencas_gdf.rename(columns={'Subcuenca': 'subcuenca', 'Cuenca': 'cuenca'})
 
     d_range = pd.date_range(start=rundate, end=(rundate + datetime.timedelta(hours=48 + 9)), freq='H')
     tabla_hora = pd.DataFrame(columns=cuencas_gdf.subcuenca, index=d_range)

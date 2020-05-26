@@ -29,6 +29,11 @@ loggers:
     handlers: [console, rotatingFile]
     propagate: no
 
+  ingestor:
+    level: DEBUG
+    handlers: [console, rotatingFile]
+    propagate: no
+
   <module>:
     level: DEBUG
     handlers: [console, rotatingFile]
