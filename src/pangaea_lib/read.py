@@ -4,8 +4,6 @@
     This module provides helper functions to read in
     land surface model datasets.
 """
-import numpy as np
-import pandas as pd
 import xarray as xr
 
 
@@ -17,10 +15,7 @@ def open_mfdataset(path_to_lsm_files,
                    lon_dim,
                    time_dim,
                    lon_to_180=False,
-                   coords_projected=False,
-                   loader=None,
-                   engine=None,
-                   autoclose=True) -> xr.Dataset:
+                   coords_projected=False) -> xr.Dataset:
     """
     Wrapper to open land surface model netcdf files
     using :func:`xarray.open_mfdataset`.
@@ -51,14 +46,6 @@ def open_mfdataset(path_to_lsm_files,
     coords_projected: bool, optional, default=False
         It True, it will assume the coordinates are already
         in the projected coordinate system.
-    loader: str, optional, default=None
-        If 'hrrr', it will load in the HRRR dataset.
-    engine: str, optional
-        See: :func:`xarray.open_mfdataset` documentation.
-    autoclose: :obj:`str`, optional, default=True
-        If True, will use autoclose option with
-        :func:`xarray.open_mfdataset`.
-
     Read with pangaea example::
 
         import pangaea as pa
@@ -86,34 +73,16 @@ def open_mfdataset(path_to_lsm_files,
                             inplace=True)
         return _xds
 
-    def extract_hrrr_date(_xds):
-        """xarray loader for HRRR"""
-        for var in _xds.variables:
-            if 'initial_time' in _xds[var].attrs.keys():
-                grid_time = pd.to_datetime(_xds[var].attrs['initial_time'],
-                                           format="%m/%d/%Y (%H:%M)")
-                if 'forecast_time' in _xds[var].attrs.keys():
-                    time_units = 'h'
-                    if 'forecast_time_units' in _xds[var].attrs.keys():
-                        time_units = \
-                            str(_xds[var].attrs['forecast_time_units'][0])
-                    time_dt = int(_xds[var].attrs['forecast_time'][0])
-                    grid_time += np.timedelta64(time_dt, time_units)
+    preprocess = define_coords
 
-                return _xds.assign(time=grid_time)
-
-    if loader == 'hrrr':
-        preprocess = extract_hrrr_date
-        engine = 'pynio' if engine is None else engine
-    else:
-        preprocess = define_coords
-
-    xds = xr.open_mfdataset(path_to_lsm_files,
-                            autoclose=autoclose,
-                            preprocess=preprocess,
-                            concat_dim=time_dim,
-                            engine=engine,
-                            )
+    # ToDo: Revisar http://xarray.pydata.org/en/stable/combining.html#combining-multi
+    # http://xarray.pydata.org/en/stable/generated/xarray.open_mfdataset.html
+    xds = xr.open_mfdataset(
+        path_to_lsm_files,
+        preprocess=preprocess,
+        concat_dim=time_dim,
+        combine='by_coords'
+    )
     xds.lsm.y_var = lat_var
     xds.lsm.x_var = lon_var
     xds.lsm.y_dim = lat_dim
@@ -122,12 +91,11 @@ def open_mfdataset(path_to_lsm_files,
     xds.lsm.coords_projected = coords_projected
 
     # make sure time dimensions are same for slicing
-    xds = xds.rename(
-        {
-            time_dim: 'time',
-            time_var: 'time',
-        }
-    )
-
+    # xds = xds.rename(
+    #     {
+    #         time_dim: 'time',
+    #         time_var: 'time',
+    #     }
+    # )
     xds.lsm.to_datetime()
     return xds

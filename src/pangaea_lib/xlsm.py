@@ -4,18 +4,24 @@
     This module is an extension for xarray for land surface models.
     (see: http://xarray.pydata.org/en/stable/internals.html#extending-xarray)
 """
-from affine import Affine
+import logging
+
 import numpy as np
-from osgeo import osr, gdalconst
 import pandas as pd
-from pyproj import Proj, transform
-from gazar.grid import geotransform_from_yx, resample_grid, utm_proj_from_latlon, ArrayGrid
 import wrf
 import xarray as xr
+from affine import Affine
+from gazar.grid import geotransform_from_yx, resample_grid, utm_proj_from_latlon, ArrayGrid
+from osgeo import osr, gdalconst
+from pyproj import Proj, transform
+
+from config.logging_conf import CUENCAS_LOGGER_NAME
+
+logger = logging.getLogger(CUENCAS_LOGGER_NAME)
 
 
 @xr.register_dataset_accessor('lsm')
-class LSMGridReader(object):
+class LSMGridReader:
     """
     This is an extension for xarray specifically
     designed for land surface models.
@@ -40,6 +46,7 @@ class LSMGridReader(object):
         with pa.open_dataset('/path/to/file.nc') as xds:
             print(xds.lsm.projection)
     """
+
     def __init__(self, xarray_obj):
         self._obj = xarray_obj
         self._projection = None
@@ -50,25 +57,28 @@ class LSMGridReader(object):
         self._y_inverted = None
 
         # set variable information
-        self.y_var = 'lat'
-        self.x_var = 'lon'
-        self.time_var = 'time'
+        self.y_var = 'XLAT'
+        self.x_var = 'XLONG'
+        self.time_var = 'XTIME'
         # set dimension information
-        self.y_dim = 'y'
-        self.x_dim = 'x'
-        self.time_dim = 'time'
+        self.y_dim = 'south_north'
+        self.x_dim = 'west_east'
+        self.time_dim = 'Time'
         # convert lon from [0 to 360] to [-180 to 180]
         self.lon_to_180 = False
         # coordinates are projected already
         self.coords_projected = False
+        #
+        self.rainc = None
+        self.rainnc = None
+        self.nc = None
 
     def to_datetime(self):
         """Converts time to datetime."""
         time_values = self._obj[self.time_var].values
         if 'datetime' not in str(time_values.dtype):
             try:
-                time_values = [time_val.decode('utf-8') for
-                               time_val in time_values]
+                time_values = [time_val.decode('utf-8') for time_val in time_values]
             except AttributeError:
                 pass
 
@@ -76,10 +86,10 @@ class LSMGridReader(object):
                 datetime_values = pd.to_datetime(time_values)
             except ValueError:
                 # WRF DATETIME FORMAT
-                datetime_values = \
-                    pd.to_datetime(time_values,
-                                   format="%Y-%m-%d_%H:%M:%S")
-
+                datetime_values = pd.to_datetime(time_values, format="%Y-%m-%d_%H:%M:%S")
+            # FixMe: ValueError: Cannot assign to the .values attribute of dimension coordinate a.k.a IndexVariable
+            #  'Time'. Please use DataArray.assign_coords, Dataset.assign_coords or Dataset.assign as appropriate.
+            # rainc['Time'].values tiene los datetime
             self._obj[self.time_var].values = datetime_values
 
     @property
@@ -122,11 +132,13 @@ class LSMGridReader(object):
                 proj_params[proj_param] = self._obj.attrs[proj_param]
 
         # determine projection from WRF Grid
-        proj = wrf.projection.getproj(**proj_params)
+        # ToDo: Corregir proj con expresion regular para remover parametros innecesarios
+        # proj = wrf.getproj(**proj_params)
+        proj_str = "+proj=lcc +lat_1=-60.0 +lat_2=-30.0 +lat_0=-32.50000762939453 +lon_0=-62.70000076293945"
 
         # export to Proj4 and add as osr projection
         self._projection = osr.SpatialReference()
-        self._projection.ImportFromProj4(str(proj.proj4()))
+        self._projection.ImportFromProj4(proj_str)
 
     def _load_grib_projection(self):
         """Get the osgeo.osr projection for Grib Grid.
@@ -174,13 +186,14 @@ class LSMGridReader(object):
                 self._projection = osr.SpatialReference()
                 self._projection.ImportFromProj4(str(map_proj4))
             elif 'MAP_PROJ' in self._obj.attrs:
+                # logger.info("pass_projection_02")
                 self._load_wrf_projection()
             elif 'grid_type' in self._obj[self.y_var].attrs:
                 self._load_grib_projection()
             elif 'ProjectionCoordinateSystem' in self._obj.keys():
                 # national water model
                 proj4_str = self._obj['ProjectionCoordinateSystem'] \
-                                .attrs['proj4']
+                    .attrs['proj4']
                 self._projection = osr.SpatialReference()
                 self._projection.ImportFromProj4(str(proj4_str))
             else:
@@ -213,16 +226,12 @@ class LSMGridReader(object):
         """:obj:`tuple`: The geotransform for grid."""
         if self._geotransform is None:
             if self._obj.attrs.get('geotransform') is not None:
-                self._geotransform = [float(g) for g in
-                                      self._obj.attrs.get('geotransform')]
-
+                self._geotransform = [float(g) for g in self._obj.attrs.get('geotransform')]
             elif str(self.epsg) != '4326':
                 proj_y, proj_x = self.coords
-                self._geotransform = geotransform_from_yx(proj_y,
-                                                          proj_x)
+                self._geotransform = geotransform_from_yx(proj_y, proj_x)
             else:
                 self._geotransform = geotransform_from_yx(*self.latlon)
-
         return self._geotransform
 
     @property
@@ -284,7 +293,7 @@ class LSMGridReader(object):
 
         if self.coords_projected:
             lon, lat = transform(Proj(self.projection.ExportToProj4()),
-                                 Proj(init='epsg:4326'),
+                                 Proj('epsg:4326'),
                                  lon,
                                  lat)
 
@@ -303,7 +312,7 @@ class LSMGridReader(object):
         if not self.coords_projected:
             lat, lon = self.latlon
             x_coords, y_coords = \
-                transform(Proj(init='epsg:4326'),
+                transform(Proj('epsg:4326'),
                           Proj(self.projection.ExportToProj4()),
                           lon,
                           lat)
@@ -324,26 +333,15 @@ class LSMGridReader(object):
         """Export subset of dataset."""
         lats, lons = grid.latlon
 
-        return xr.Dataset({variable: (['time', 'y', 'x'],
-                                      new_data,
-                                      self._obj[variable].attrs),
-                           },
-                          coords={'lat': (['y', 'x'],
-                                          lats,
-                                          self._obj[variable]
-                                          .coords[self.y_var].attrs),
-                                  'lon': (['y', 'x'],
-                                          lons,
-                                          self._obj[variable]
-                                          .coords[self.x_var].attrs),
-                                  'time': (['time'],
-                                           self._obj[self.time_var].values,
-                                           self._obj[self.time_var].attrs),
-                                  },
-                          attrs={'proj4': grid.proj4,
-                                 'geotransform': grid.geotransform,
-                                 }
-                          )
+        return xr.Dataset(
+            {variable: (['time', 'y', 'x'], new_data, self._obj[variable].attrs)},
+            coords={
+                'lat': (['y', 'x'], lats, self._obj[variable].coords[self.y_var].attrs),
+                'lon': (['y', 'x'], lons, self._obj[variable].coords[self.x_var].attrs),
+                'time': (['time'], self._obj[self.time_var].values, self._obj[self.time_var].attrs)
+            },
+            attrs={'proj4': grid.proj4, 'geotransform': grid.geotransform}
+        )
 
     def resample(self, variable, match_grid):
         """Resample data to grid.
@@ -373,6 +371,7 @@ class LSMGridReader(object):
 
     def _getvar(self, variable, yslice, xslice):
         """Get the variable either directly or calculated"""
+
         # FAILED ATTEMPT TO USE wrf.getvar
         # if 'MAP_PROJ' in self._obj.attrs:
         #    try:

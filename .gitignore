@@ -129,6 +129,10 @@ dmypy.json
 .pyre/
 
 **/.idea/
-**/temp/salida_*/
+**/temp/*
 **/test_cuencas.sh
 **/logs/*.log
+#**/ipython_preload_*.py
+#**/*_test*.py
+**/test_*.sh
+**/geotiff/

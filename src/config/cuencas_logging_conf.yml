@@ -1,0 +1,45 @@
+version: 1
+disable_existing_loggers: true
+
+formatters:
+  simple:
+    format: '%(asctime)s - %(module)s.%(funcName)s(%(lineno)d) - %(levelname)s - %(message)s'
+    # https://docs.python.org/3/library/logging.html#logrecord-attributes
+
+handlers:
+  console:
+    class: logging.StreamHandler
+    level: DEBUG
+    formatter: simple
+    stream: ext://sys.stdout
+
+  rotatingFile:
+    class: logging.handlers.RotatingFileHandler
+    level: DEBUG
+    formatter: simple
+    filename: 'logs/cuencas_logger.log'
+    backupCount: 10
+    maxBytes: 102400
+    mode: 'a'
+    encoding: 'utf-8'
+
+loggers:
+  cuencas:
+    level: DEBUG
+    handlers: [console, rotatingFile]
+    propagate: no
+
+  <module>:
+    level: DEBUG
+    handlers: [console, rotatingFile]
+    propogate: no
+
+  <module.x>:
+    level: DEBUG
+    handlers: [console, rotatingFile]
+    propogate: yes
+
+root:
+  level: DEBUG
+  handlers: [console]
+  propagate: yes
