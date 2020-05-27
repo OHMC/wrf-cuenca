@@ -2,7 +2,11 @@ import argparse
 import datetime
 import os
 import time
+from threading import Thread
+# from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
+import ray
 import geopandas as gpd
 import matplotlib.pyplot as plt
 import numpy as np
@@ -16,9 +20,10 @@ from osgeo import osr, gdalconst
 from rasterstats import zonal_stats
 
 import pangaea_lib as pa
-from config.constants import PROG_VERSION
+from config.constants import PROG_VERSION, COLUM_REPLACE, RAY_ADDRESS
 from config.logging_conf import CUENCAS_LOGGER_NAME, get_logger_from_config_file
 
+ray.init(address=RAY_ADDRESS)
 logger = get_logger_from_config_file(CUENCAS_LOGGER_NAME)
 pa.register()  # Solo para utilizar el import y que se registre el accessor en xarray
 
@@ -64,6 +69,7 @@ def to_projection(_plsm, variable) -> xr.Dataset:
     return _plsm.export_dataset(variable, np.array(new_data), ggrid)
 
 
+@ray.remote
 def guardar_tif(vari: xr.Dataset, arr: np.ndarray, out_path: str):
     nw_ds = rasterio.open(out_path, 'w', driver='GTiff',
                           height=arr.shape[0],
@@ -75,7 +81,9 @@ def guardar_tif(vari: xr.Dataset, arr: np.ndarray, out_path: str):
     nw_ds.close()
 
 
+@ray.remote
 def convertir_variable(plsm: xr.Dataset, variable: str) -> xr.Dataset:
+    pa.register()
     vari = to_projection(plsm.lsm, variable)
     vari['lat'] = vari['lat'].sel(x=1)
     vari['lon'] = vari['lon'].sel(y=1)
@@ -88,24 +96,29 @@ def genear_tif_prec(plsm: xr.Dataset, out_path: str = None):
         out_path = f"geotiff/ppn_{plsm.START_DATE[:-6]}"
     plsm.variables['RAINNC'].values = plsm.variables['RAINNC'].values + 1000
     plsm.variables['RAINC'].values = plsm.variables['RAINC'].values + 1000
-    rainnc = convertir_variable(plsm, 'RAINNC')
-    rainc = convertir_variable(plsm, 'RAINC')
+    rainnc_id = convertir_variable.remote(plsm, 'RAINNC')
+    rainc_id = convertir_variable.remote(plsm, 'RAINC')
+    rainnc = ray.get(rainnc_id)
+    rainc = ray.get(rainc_id)
     arrs = {}
     for t in range(len(plsm.coords['Time'])):
         arrs[t] = rainnc.RAINNC[t].values[:, :] + rainc.RAINC[t].values[:, :]
         arrs[t][arrs[t] == 0] = np.nan
+    gtiff_id_list = []
     for t in range(1, len(plsm.coords['Time'])):
-        guardar_tif(rainnc, arrs[t] - arrs[t - 1], f"{out_path}_{t}.tif")
-    guardar_tif(rainnc, arrs[33] - arrs[9], f"{out_path}.tif")
+        gtiff_id_list.append(guardar_tif.remote(rainnc_id, arrs[t] - arrs[t - 1], f"{out_path}_{t}.tif"))
+    gtiff_id_list.append(guardar_tif.remote(rainnc_id, arrs[33] - arrs[9], f"{out_path}.tif"))
+    for g_id in gtiff_id_list:
+        ray.get(g_id)
+
 
 
 def integrar_en_cuencas(cuencas_shp: str) -> gpd.GeoDataFrame:
     cuencas_gdf: gpd.GeoDataFrame = gpd.read_file(cuencas_shp)
     df_zonal_stats = pd.DataFrame(zonal_stats(cuencas_shp, "geotiff/ppn.tif"))
 
-    cuencas_gdf_ppn = pd.concat([cuencas_gdf, df_zonal_stats], axis=1)
-    cuencas_gdf_ppn = cuencas_gdf_ppn.dropna(subset=['mean'])
-    cuencas_gdf_ppn = cuencas_gdf_ppn.rename(columns={'Subcuenca': 'subcuenca', 'Cuenca': 'cuenca'})
+    cuencas_gdf_ppn = pd.concat([cuencas_gdf, df_zonal_stats], axis=1).dropna(subset=['mean'])
+    cuencas_gdf_ppn = cuencas_gdf_ppn.rename(columns=COLUM_REPLACE)
     return cuencas_gdf_ppn[['subcuenca', 'cuenca', 'geometry', 'count', 'max', 'mean', 'min']]
 
 
@@ -154,78 +167,69 @@ def guardar_tabla(cuencas_gdf_ppn: gpd.GeoDataFrame, outdir: str, rundate: datet
     cuencas_gdf_ppn.to_csv(path, index=False, mode='a')
 
 
-def generar_tabla_por_hora(outdir: str, rundate: datetime.datetime, configuracion: str):
-    path = (outdir + rundate.strftime('%Y_%m/%d/cordoba/cuencas/') + 'ppn_por_hora_' + configuracion + '.csv')
-    path_sa = (outdir + rundate.strftime('%Y_%m/%d/cordoba/cuencas/') + 'san_antonio/ppn_por_hora_sa_'
-               + configuracion + '.csv')  # san antonio
-    path_lq = (outdir + rundate.strftime('%Y_%m/%d/cordoba/cuencas/') + 'la_quebrada/ppn_por_hora_lq_'
-               + configuracion + '.csv')  # la quebrada
+@ray.remote
+def tabla_por_hora(gdf_path, tabla_path, d_range, gdf_index, drop_na, c_rename=''):
+    if drop_na:
+        cuencas_gdf = gpd.read_file(gdf_path).dropna(subset=[gdf_index])
+    else:
+        cuencas_gdf = gpd.read_file(gdf_path)
+    if c_rename:
+        cuencas_gdf = cuencas_gdf.rename(columns=c_rename)
 
-    try:
-        os.makedirs(os.path.dirname(path_sa))
-        os.makedirs(os.path.dirname(path_lq))
-        os.makedirs(os.path.dirname(path))
-    except OSError:
-        pass
-    cuencas_gdf = gpd.read_file('shapefiles/Cuencas hidrográficas.shp')
-    cuencas_gdf = cuencas_gdf.rename(columns={'Subcuenca': 'subcuenca', 'Cuenca': 'cuenca'})
-
-    d_range = pd.date_range(start=rundate, end=(rundate + datetime.timedelta(hours=48 + 9)), freq='H')
-    tabla_hora = pd.DataFrame(columns=cuencas_gdf.subcuenca, index=d_range)
+    cuencas_gdf = cuencas_gdf.rename(columns=COLUM_REPLACE)
+    tabla_hora = pd.DataFrame(columns=cuencas_gdf[gdf_index], index=d_range)
     tabla_hora.index.name = 'fecha'
-    # cuenca san antonio
-    cuencas_gdf_sa = gpd.read_file('shapefiles/cuencas_sa.shp').dropna(subset=['NAME'])
-    tabla_hora_sa = pd.DataFrame(columns=cuencas_gdf_sa.NAME, index=d_range)
 
-    tabla_hora_sa.index.name = 'fecha'
-    # cuenca la quebrada
-    cuencas_gdf_lq = gpd.read_file('shapefiles/cuenca_lq.shp').dropna(subset=['NAME'])
-    tabla_hora_lq = pd.DataFrame(columns=cuencas_gdf_lq.NAME, index=d_range)
-
-    tabla_hora_lq.index.name = 'fecha'
     for i in range(1, len(tabla_hora)):
-        cuencas_gdf = gpd.read_file('shapefiles/Cuencas hidrográficas.shp')
-        cuencas_gdf_sa = gpd.read_file('shapefiles/cuencas_sa.shp').dropna(subset=['NAME'])
-        cuencas_gdf_lq = gpd.read_file('shapefiles/cuenca_lq.shp').dropna(subset=['NAME'])
-        # ToDo: Revisar
         df_zonal_stats = pd.DataFrame(zonal_stats(cuencas_gdf, f"geotiff/ppn_{i}.tif"))
-        df_zonal_stats_sa = pd.DataFrame(zonal_stats(cuencas_gdf_sa, f"geotiff/ppn_{i}.tif"))
-        df_zonal_stats_lq = pd.DataFrame(zonal_stats(cuencas_gdf_lq, f"geotiff/ppn_{i}.tif"))
+        cuencas_gdf_concat = pd.concat([cuencas_gdf[gdf_index], df_zonal_stats['mean']], axis=1)
+        cuencas_gdf_concat = cuencas_gdf_concat.dropna(subset=['mean']).set_index(gdf_index)
+        tabla_hora.iloc[i] = cuencas_gdf_concat['mean']
 
-        cuencas_gdf = cuencas_gdf.rename(columns={'Subcuenca': 'subcuenca', 'Cuenca': 'cuenca'})
-        cuencas_gdf = pd.concat([cuencas_gdf['subcuenca'], df_zonal_stats['mean']], axis=1)
-        cuencas_gdf = cuencas_gdf.dropna(subset=['mean']).set_index('subcuenca')
-        tabla_hora.iloc[i] = cuencas_gdf['mean']
-        # san antonio
-        cuencas_gdf_sa = pd.concat([cuencas_gdf_sa['NAME'], df_zonal_stats_sa['mean']], axis=1)
-        cuencas_gdf_sa = cuencas_gdf_sa.dropna(subset=['mean']).set_index('NAME')
-        tabla_hora_sa.iloc[i] = cuencas_gdf_sa['mean']
-        # la quebrada
-        cuencas_gdf_lq = pd.concat([cuencas_gdf_lq['NAME'], df_zonal_stats_lq['mean']], axis=1)
-        cuencas_gdf_lq = cuencas_gdf_lq.dropna(subset=['mean']).set_index('NAME')
-        tabla_hora_lq.iloc[i] = cuencas_gdf_lq['mean']
     tabla_hora = tabla_hora.astype(float).round(2)
     tabla_hora.index = tabla_hora.index + datetime.timedelta(hours=-3)
-    tabla_hora.to_csv(path)
-    # san antonio
-    tabla_hora_sa = tabla_hora_sa.astype(float).round(2)
-    tabla_hora_sa.index = tabla_hora_sa.index + datetime.timedelta(hours=-3)
-    tabla_hora_sa.to_csv(path_sa)
+    tabla_hora.to_csv(tabla_path)
+    return True
 
-    # san antonio
-    tabla_hora_lq = tabla_hora_lq.astype(float).round(2)
-    tabla_hora_lq.index = tabla_hora_lq.index + datetime.timedelta(hours=-3)
-    tabla_hora_lq.to_csv(path_lq)
+
+def generar_tabla_por_hora(outdir: str, rundate: datetime.datetime, configuracion: str):
+    rundate_str = rundate.strftime('%Y_%m/%d')
+    path_dict = {
+        'base': Path(f"{outdir}{rundate_str}/cordoba/cuencas/ppn_por_hora_{configuracion}.csv"),
+        'la_quebrada': Path(f"{outdir}{rundate_str}/cordoba/cuencas/la_quebrada/ppn_por_hora_lq_{configuracion}.csv"),
+        'san_antonio': Path(f"{outdir}{rundate_str}/cordoba/cuencas/san_antonio/ppn_por_hora_sa_{configuracion}.csv")
+    }
+
+    for p in path_dict.values():
+        p.parent.mkdir(parents=True, exist_ok=True)
+
+    d_range = pd.date_range(start=rundate, end=(rundate + datetime.timedelta(hours=48 + 9)), freq='H')
+
+    base_shp = 'shapefiles/Cuencas hidrográficas.shp'
+    # cuenca san antonio
+    sa_shp = 'shapefiles/cuencas_sa.shp'
+    # cuenca la quebrada
+    lq_shp = 'shapefiles/cuenca_lq.shp'
+    t_list = [
+        tabla_por_hora.remote(base_shp, path_dict['base'], d_range, 'subcuenca', False, COLUM_REPLACE),
+        tabla_por_hora.remote(lq_shp, path_dict['la_quebrada'], d_range, 'NAME', True),
+        tabla_por_hora.remote(sa_shp, path_dict['san_antonio'], d_range, 'NAME', True)
+    ]
+    for t in t_list:
+        ray.get(t)
 
 
 def generar_producto_cuencas(wrfout, outdir_productos, outdir_tabla, configuracion):
+    start = time.time()
     rundate, xds = corregir_wrfout(wrfout)
+    print(f"Tiempo corregir_wrfout = {time.time() - start}")
     # nc = netCDF4.Dataset(wrfout)
     # xds.lsm.rainc = wrf.getvar(nc, 'RAINC', timeidx=wrf.ALL_TIMES)
     # xds.lsm.rainnc = wrf.getvar(nc, 'RAINNC', timeidx=wrf.ALL_TIMES)
-
+    start = time.time()
     genear_tif_prec(xds, out_path='geotiff/ppn')
     xds.close()
+    print(f"Tiempo genear_tif_prec = {time.time() - start}")
     # nc.close()
     start = time.time()
     cuencas_gdf_ppn: gpd.GeoDataFrame = integrar_en_cuencas('shapefiles/cuencas.shp')
