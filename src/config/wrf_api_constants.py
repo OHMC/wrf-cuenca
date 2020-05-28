@@ -7,18 +7,7 @@ if not API_TOKEN:
 
 API_BASE_URL = 'https://ohmc.com.ar/wrf-beta/api'
 
-WRF_DATA_SOURCES = ['localidades', 'estaciones']
-WRF_API_NAMES = {
-    'localidades': 'wrf-estacion',
-    'estaciones': 'wrf-localidad'
-}
-
-NOMBRES_PROVINCIAS = {
-    'cordoba': 'Córdoba',
-    'chubut': 'Chubut',
-    'san_juan': 'San Juan',
-    'santiago_del_estero': 'Santiago del Estero'
-}
+API_ROOT = "/datos-meteo"
 
 API_RESPONSES = {
     'post_ok': 201,

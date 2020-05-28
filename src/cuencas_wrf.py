@@ -1,9 +1,9 @@
 import argparse
 import datetime
 import os
+import pickle
+import re
 import time
-from threading import Thread
-# from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import ray
@@ -20,15 +20,23 @@ from osgeo import osr, gdalconst
 from rasterstats import zonal_stats
 
 import pangaea_lib as pa
-from config.constants import PROG_VERSION, COLUM_REPLACE, RAY_ADDRESS
+from config.constants import PROG_VERSION, COLUM_REPLACE, RAY_ADDRESS, WRFOUT_REGEX, CUENCAS_API_PICKLE_PATH
 from config.logging_conf import CUENCAS_LOGGER_NAME, get_logger_from_config_file
+from config.wrf_api_constants import API_ROOT
 
 ray.init(address=RAY_ADDRESS)
 logger = get_logger_from_config_file(CUENCAS_LOGGER_NAME)
 pa.register()  # Solo para utilizar el import y que se registre el accessor en xarray
 
+cuencas_api_dict = {'meta': {}, 'csv': {'ppn_acum_diario': {}, 'ppn_por_hora': {}}}
 
-def corregir_wrfout(ruta_wrfout: str) -> (datetime.datetime, xarray.Dataset):
+
+def dump_cuencas_api_dict():
+    with open(CUENCAS_API_PICKLE_PATH, mode='wb') as f:
+        pickle.dump(cuencas_api_dict, f)
+
+
+def corregir_wrfout(ruta_wrfout: str) -> xarray.Dataset:
     """Fixes variables dimensions
         Parameters
         ----------
@@ -41,8 +49,7 @@ def corregir_wrfout(ruta_wrfout: str) -> (datetime.datetime, xarray.Dataset):
     if len(xds.coords['XLAT'].shape) > 2:
         for var in variables:
             xds.coords[var] = xds.coords[var].mean(axis=0)
-    rundate = datetime.datetime.strptime(xds.START_DATE, '%Y-%m-%d_%H:%M:%S')
-    return rundate, xds
+    return xds
 
 
 def to_projection(_plsm, variable) -> xr.Dataset:
@@ -91,9 +98,7 @@ def convertir_variable(plsm: xr.Dataset, variable: str) -> xr.Dataset:
     return vari
 
 
-def genear_tif_prec(plsm: xr.Dataset, out_path: str = None):
-    if out_path is None:
-        out_path = f"geotiff/ppn_{plsm.START_DATE[:-6]}"
+def genear_tif_prec(plsm: xr.Dataset, out_path: str):
     plsm.variables['RAINNC'].values = plsm.variables['RAINNC'].values + 1000
     plsm.variables['RAINC'].values = plsm.variables['RAINC'].values + 1000
     rainnc_id = convertir_variable.remote(plsm, 'RAINNC')
@@ -104,13 +109,14 @@ def genear_tif_prec(plsm: xr.Dataset, out_path: str = None):
     for t in range(len(plsm.coords['Time'])):
         arrs[t] = rainnc.RAINNC[t].values[:, :] + rainc.RAINC[t].values[:, :]
         arrs[t][arrs[t] == 0] = np.nan
+
     gtiff_id_list = []
     for t in range(1, len(plsm.coords['Time'])):
         gtiff_id_list.append(guardar_tif.remote(rainnc_id, arrs[t] - arrs[t - 1], f"{out_path}_{t}.tif"))
-    gtiff_id_list.append(guardar_tif.remote(rainnc_id, arrs[33] - arrs[9], f"{out_path}.tif"))
-    for g_id in gtiff_id_list:
-        ray.get(g_id)
 
+    gtiff_id_list.append(guardar_tif.remote(rainnc_id, arrs[33] - arrs[9], f"{out_path}.tif"))
+
+    ray.get(gtiff_id_list)
 
 
 def integrar_en_cuencas(cuencas_shp: str) -> gpd.GeoDataFrame:
@@ -157,9 +163,13 @@ def generar_imagen(cuencas_gdf_ppn: gpd.GeoDataFrame, outdir: str, rundate: date
 
 
 def guardar_tabla(cuencas_gdf_ppn: gpd.GeoDataFrame, outdir: str, rundate: datetime.datetime, configuracion: str):
-    path = f"{outdir}{rundate.strftime('%Y_%m/%d/cordoba/')}cuencas_{configuracion}.csv"
+    rundate_str = rundate.strftime('%Y_%m/%d')
+    cuencas_api_dict['csv']['ppn_acum_diario']['path'] = f"{API_ROOT}/{rundate_str}/cordoba/cuencas_{configuracion}.csv"
+    cuencas_api_dict['csv']['ppn_acum_diario']['is_image'] = False
+    cuencas_api_dict['csv']['ppn_acum_diario']['acumulacion'] = "12:00:00"  # ToDo: Revisar
+    path = Path(f"{outdir}{rundate_str}/cordoba/cuencas_{configuracion}.csv")
     try:
-        os.makedirs(os.path.dirname(path))
+        path.parent.mkdir(parents=True, exist_ok=True)
     except OSError:
         pass
     cuencas_gdf_ppn = cuencas_gdf_ppn[['subcuenca', 'cuenca', 'count', 'max', 'mean', 'min']]
@@ -168,13 +178,15 @@ def guardar_tabla(cuencas_gdf_ppn: gpd.GeoDataFrame, outdir: str, rundate: datet
 
 
 @ray.remote
-def tabla_por_hora(gdf_path, tabla_path, d_range, gdf_index, drop_na, c_rename=''):
+def tabla_por_hora(gdf_path, tabla_path, rundate, gdf_index, drop_na, c_rename=''):
     if drop_na:
         cuencas_gdf = gpd.read_file(gdf_path).dropna(subset=[gdf_index])
     else:
         cuencas_gdf = gpd.read_file(gdf_path)
     if c_rename:
         cuencas_gdf = cuencas_gdf.rename(columns=c_rename)
+
+    d_range = pd.date_range(start=rundate, end=(rundate + datetime.timedelta(hours=48 + 9)), freq='H')
 
     cuencas_gdf = cuencas_gdf.rename(columns=COLUM_REPLACE)
     tabla_hora = pd.DataFrame(columns=cuencas_gdf[gdf_index], index=d_range)
@@ -194,56 +206,76 @@ def tabla_por_hora(gdf_path, tabla_path, d_range, gdf_index, drop_na, c_rename='
 
 def generar_tabla_por_hora(outdir: str, rundate: datetime.datetime, configuracion: str):
     rundate_str = rundate.strftime('%Y_%m/%d')
+    # Datos para api web
+    cuencas_api_dict['csv']['ppn_por_hora']['path'] = f"{API_ROOT}/{rundate_str}/cordoba/cuencas/" \
+                                                      f"ppn_por_hora_{configuracion}.csv"
+    cuencas_api_dict['csv']['ppn_por_hora']['is_image'] = False
+    cuencas_api_dict['csv']['ppn_por_hora']['acumulacion'] = "12:00:00"  # ToDo: Revisar
     path_dict = {
         'base': Path(f"{outdir}{rundate_str}/cordoba/cuencas/ppn_por_hora_{configuracion}.csv"),
         'la_quebrada': Path(f"{outdir}{rundate_str}/cordoba/cuencas/la_quebrada/ppn_por_hora_lq_{configuracion}.csv"),
         'san_antonio': Path(f"{outdir}{rundate_str}/cordoba/cuencas/san_antonio/ppn_por_hora_sa_{configuracion}.csv")
     }
-
     for p in path_dict.values():
         p.parent.mkdir(parents=True, exist_ok=True)
-
-    d_range = pd.date_range(start=rundate, end=(rundate + datetime.timedelta(hours=48 + 9)), freq='H')
 
     base_shp = 'shapefiles/Cuencas hidrográficas.shp'
     # cuenca san antonio
     sa_shp = 'shapefiles/cuencas_sa.shp'
     # cuenca la quebrada
     lq_shp = 'shapefiles/cuenca_lq.shp'
+    rundate_id = ray.put(rundate)
     t_list = [
-        tabla_por_hora.remote(base_shp, path_dict['base'], d_range, 'subcuenca', False, COLUM_REPLACE),
-        tabla_por_hora.remote(lq_shp, path_dict['la_quebrada'], d_range, 'NAME', True),
-        tabla_por_hora.remote(sa_shp, path_dict['san_antonio'], d_range, 'NAME', True)
+        tabla_por_hora.remote(base_shp, path_dict['base'], rundate_id, 'subcuenca', False, COLUM_REPLACE),
+        tabla_por_hora.remote(lq_shp, path_dict['la_quebrada'], rundate_id, 'NAME', True),
+        tabla_por_hora.remote(sa_shp, path_dict['san_antonio'], rundate_id, 'NAME', True)
     ]
-    for t in t_list:
-        ray.get(t)
+    ray.get(t_list)
 
 
-def generar_producto_cuencas(wrfout, outdir_productos, outdir_tabla, configuracion):
+def get_configuracion(wrfout) -> (str, datetime.datetime):
+    """Retorna la parametrizacion y el timestamp a partir del nombre del archivo wrfout"""
+    m = re.match(WRFOUT_REGEX, wrfout)
+    if not m:
+        logger.critical("No se pudo obtener la configuracion, proporcione una desde los parametros de ejecición.")
+        raise ValueError
+    m_dict = m.groupdict()
+    param = m_dict.get('param')
+    timestamp = datetime.datetime.strptime(m_dict.get('timestamp'), '%Y-%m-%d_%H:%M:%S')
+    return param, timestamp
+
+
+def generar_producto_cuencas(wrfout, outdir_productos, outdir_tabla, configuracion=None):
+    wrfout_path = Path(wrfout)
+    param, rundate = get_configuracion(wrfout_path.name)
+    # noinspection PyTypeChecker
+    cuencas_api_dict['meta']['timestamp'] = rundate
+    # noinspection PyTypeChecker
+    cuencas_api_dict['meta']['param'] = param
+    if not configuracion:
+        configuracion = f"CBA_{param}_{rundate.hour}"
     start = time.time()
-    rundate, xds = corregir_wrfout(wrfout)
-    print(f"Tiempo corregir_wrfout = {time.time() - start}")
-    # nc = netCDF4.Dataset(wrfout)
-    # xds.lsm.rainc = wrf.getvar(nc, 'RAINC', timeidx=wrf.ALL_TIMES)
-    # xds.lsm.rainnc = wrf.getvar(nc, 'RAINNC', timeidx=wrf.ALL_TIMES)
+    xds = corregir_wrfout(wrfout_path)
+    logger.info(f"Tiempo corregir_wrfout = {time.time() - start}")
     start = time.time()
     genear_tif_prec(xds, out_path='geotiff/ppn')
     xds.close()
-    print(f"Tiempo genear_tif_prec = {time.time() - start}")
+    logger.info(f"Tiempo genear_tif_prec = {time.time() - start}")
     # nc.close()
     start = time.time()
     cuencas_gdf_ppn: gpd.GeoDataFrame = integrar_en_cuencas('shapefiles/cuencas.shp')
-    print(f"Tiempo integrar_en_cuencas = {time.time() - start}")
+    logger.info(f"Tiempo integrar_en_cuencas = {time.time() - start}")
     start = time.time()
     guardar_tabla(cuencas_gdf_ppn, outdir_tabla, rundate, configuracion)
-    print(f"Tiempo guardar_tabla = {time.time() - start}")
+    logger.info(f"Tiempo guardar_tabla = {time.time() - start}")
     start = time.time()
     generar_tabla_por_hora(outdir_tabla, rundate, configuracion)
-    print(f"Tiempo generar_tabla_por_hora = {time.time() - start}")
+    logger.info(f"Tiempo generar_tabla_por_hora = {time.time() - start}")
 
     start = time.time()
     generar_imagen(cuencas_gdf_ppn, outdir_productos, rundate, configuracion)
-    print(f"Tiempo generar_imagen = {time.time() - start}")
+    logger.info(f"Tiempo generar_imagen = {time.time() - start}")
+    dump_cuencas_api_dict()
 
 
 def main():
@@ -251,7 +283,7 @@ def main():
     parser.add_argument("wrfout", help="ruta al wrfout de la salida del WRF")
     parser.add_argument("outdir_productos", help="ruta donde se guardan los productos")
     parser.add_argument("outdir_tabla", help="ruta donde se guardan las tablas de datos")
-    parser.add_argument("configuracion", help="configuracion de las parametrizaciones")
+    parser.add_argument("-c", "--configuracion", help="configuracion de las parametrizaciones", default='')
     parser.add_argument('-v', '--version', action='version', version=f'%(prog)s {PROG_VERSION}')
 
     args = parser.parse_args()

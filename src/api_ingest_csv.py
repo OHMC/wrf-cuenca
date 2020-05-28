@@ -27,8 +27,5 @@ def load_wrf_api_dicts() -> dict:
 
 if __name__ == '__main__':
     logger.info("Iniciando ingestor DB.")
-
-    wrf_api, wrf_config = load_wrf_api_dicts()
-    ingest_csv_to_db(wrf_api, wrf_config)
-
+    ingest_csv_to_db(load_wrf_api_dicts())
     logger.info("Fin ingestor.")

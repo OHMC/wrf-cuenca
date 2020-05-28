@@ -7,5 +7,6 @@ CUENCAS_API_PICKLE_PATH = f'{PICKLE_PATH}/cuencas_api_dict.p'
 
 COLUM_REPLACE = {'Subcuenca': 'subcuenca', 'Cuenca': 'cuenca'}
 
-# RAY_TIMELINE_PATH = '/tmp/ray_timeline.json'
 RAY_ADDRESS = os.getenv('RAY_ADDRESS', "localhost:6379")
+
+WRFOUT_REGEX = r"wrfout_(?P<param>[A-Z])_[a-z0-9]{3,4}_(?P<timestamp>\d{4}-\d{2}-\d{2}_\d{2}:\d{2}:\d{2})"
