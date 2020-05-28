@@ -136,3 +136,4 @@ dmypy.json
 #**/*_test*.py
 **/test_*.sh
 **/geotiff/*.tif
+.vscode/

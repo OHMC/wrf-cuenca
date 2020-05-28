@@ -37,12 +37,17 @@ def dump_cuencas_api_dict():
 
 
 def corregir_wrfout(ruta_wrfout: str) -> xarray.Dataset:
-    """Fixes variables dimensions
+    """Fixes variables dimensions, saves the fixed  
+       data to a new netCDF file and gets the
+       run date of the desired wrfout file
+
         Parameters
         ----------
         ruta_wrfout: str
             route to the nc file to fix
-
+        Returns
+        -------
+        rundate
     """
     xds = xr.open_dataset(ruta_wrfout)
     variables = ['XLAT', 'XLONG', 'XLAT_U', 'XLONG_U', 'XLAT_V', 'XLONG_V']
@@ -99,6 +104,15 @@ def convertir_variable(plsm: xr.Dataset, variable: str) -> xr.Dataset:
 
 
 def genear_tif_prec(plsm: xr.Dataset, out_path: str):
+    """
+    This functions opens a wrfout NC file, gets the vars RAINNC
+    and RAINC and saves them as a geotiff tile
+
+    Parameters:
+        ruta_wrfout (str): path to the wrfout NC file
+        out_path (str): path to the directory where to save 
+                        the geoptiffs
+    """
     plsm.variables['RAINNC'].values = plsm.variables['RAINNC'].values + 1000
     plsm.variables['RAINC'].values = plsm.variables['RAINC'].values + 1000
     rainnc_id = convertir_variable.remote(plsm, 'RAINNC')
@@ -120,6 +134,15 @@ def genear_tif_prec(plsm: xr.Dataset, out_path: str):
 
 
 def integrar_en_cuencas(cuencas_shp: str) -> gpd.GeoDataFrame:
+    """
+    This functions opens a geotiff with ppn data, converts to a raster,
+    integrate the ppn into cuencas and returns a GeoDataFrame object.
+
+    Parameters:
+        cuencas_gdf (GeoDataFrame): a GeoDataFrame containing a shapefiles
+    Returns:
+        cuencas_gdf_ppn (GeoDataFrame): a geodataframe with cuerncas and ppn
+    """
     cuencas_gdf: gpd.GeoDataFrame = gpd.read_file(cuencas_shp)
     df_zonal_stats = pd.DataFrame(zonal_stats(cuencas_shp, "geotiff/ppn.tif"))
 
@@ -163,6 +186,17 @@ def generar_imagen(cuencas_gdf_ppn: gpd.GeoDataFrame, outdir: str, rundate: date
 
 
 def guardar_tabla(cuencas_gdf_ppn: gpd.GeoDataFrame, outdir: str, rundate: datetime.datetime, configuracion: str):
+    """ Generates a cvs from a GDF with Accumulated PPN and basins
+    
+    This functions gets a GeoDataFrame with PPN and basins informations
+    and generates a CSV with that information.
+
+    Parameters:
+        cuencas_gdf_ppn (GDF): dataframe to be exported
+        outdir (str): path to the out dir
+        rundate (str): run date of wrfout
+        configuración (str): identifier of the wrf simulation
+    """
     rundate_str = rundate.strftime('%Y_%m/%d')
     cuencas_api_dict['csv']['ppn_acum_diario']['path'] = f"{API_ROOT}/{rundate_str}/cordoba/cuencas_{configuracion}.csv"
     cuencas_api_dict['csv']['ppn_acum_diario']['is_image'] = False
@@ -179,6 +213,20 @@ def guardar_tabla(cuencas_gdf_ppn: gpd.GeoDataFrame, outdir: str, rundate: datet
 
 @ray.remote
 def tabla_por_hora(gdf_path, tabla_path, rundate, gdf_index, drop_na, c_rename=''):
+        """ Generates csv pear each basin
+    This function opens the GeoTiff generated in genear_tif_prec().
+    Then gets the accumulated PPN within an hour, and for each basin
+    and stores in a GDF.
+    This GDF is then exported to csv files
+
+    Parameters:
+        gdf_path (str): path to the geotiff
+        tabla_path (str): path to the csv file
+        rundate (datetime): date of the wrf runout
+        gdf_index (str): columns to drop
+        drop_na (bool): to drop or not to drop
+        c_rename (str): rename column
+    """
     if drop_na:
         cuencas_gdf = gpd.read_file(gdf_path).dropna(subset=[gdf_index])
     else:
@@ -205,6 +253,15 @@ def tabla_por_hora(gdf_path, tabla_path, rundate, gdf_index, drop_na, c_rename='
 
 
 def generar_tabla_por_hora(outdir: str, rundate: datetime.datetime, configuracion: str):
+    """ Generates csv pear each basin
+    This function opens ppn data and shapefiles with basisn
+    of Cordoba. Then calls a tabla_por_hora() to get ppn per hour and basin.
+
+    Parameters:
+        outdir (str): path where to store the generated files
+        rundate (datetime): date of the wrf runout
+        configuracion (str): wrf configuration
+    """
     rundate_str = rundate.strftime('%Y_%m/%d')
     # Datos para api web
     cuencas_api_dict['csv']['ppn_por_hora']['path'] = f"{API_ROOT}/{rundate_str}/cordoba/cuencas/" \
@@ -246,6 +303,11 @@ def get_configuracion(wrfout) -> (str, datetime.datetime):
 
 
 def generar_producto_cuencas(wrfout, outdir_productos, outdir_tabla, configuracion=None):
+        """ This is the main functions and shoudl be called 
+    when you want to generates cuencas product from other
+    Python script.  
+
+    """
     wrfout_path = Path(wrfout)
     param, rundate = get_configuracion(wrfout_path.name)
     # noinspection PyTypeChecker
