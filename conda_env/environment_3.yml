@@ -182,4 +182,5 @@ dependencies:
     - traitlets==4.3.3
     - wcwidth==0.1.9
     - xarray==0.14.1
+    - ray==0.8.5
 
