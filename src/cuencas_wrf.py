@@ -37,17 +37,16 @@ def dump_cuencas_api_dict():
 
 
 def corregir_wrfout(ruta_wrfout: str) -> xarray.Dataset:
-    """Fixes variables dimensions, saves the fixed  
-       data to a new netCDF file and gets the
-       run date of the desired wrfout file
-
-        Parameters
-        ----------
-        ruta_wrfout: str
+    """
+    Fixes variables dimensions, saves the fixed data to a new netCDF file and gets the run date of the desired
+    wrfout file.
+    Parameters
+    ----------
+    ruta_wrfout:
             route to the nc file to fix
-        Returns
-        -------
-        rundate
+    Returns
+    -------
+    Dataset
     """
     xds = xr.open_dataset(ruta_wrfout)
     variables = ['XLAT', 'XLONG', 'XLAT_U', 'XLONG_U', 'XLAT_V', 'XLONG_V']
@@ -109,8 +108,8 @@ def genear_tif_prec(plsm: xr.Dataset, out_path: str):
     and RAINC and saves them as a geotiff tile
 
     Parameters:
-        ruta_wrfout (str): path to the wrfout NC file
-        out_path (str): path to the directory where to save 
+        plsm: path to the wrfout NC file
+        out_path: path to the directory where to save
                         the geoptiffs
     """
     plsm.variables['RAINNC'].values = plsm.variables['RAINNC'].values + 1000
@@ -139,7 +138,7 @@ def integrar_en_cuencas(cuencas_shp: str) -> gpd.GeoDataFrame:
     integrate the ppn into cuencas and returns a GeoDataFrame object.
 
     Parameters:
-        cuencas_gdf (GeoDataFrame): a GeoDataFrame containing a shapefiles
+        cuencas_shp: Path to shapefile
     Returns:
         cuencas_gdf_ppn (GeoDataFrame): a geodataframe with cuerncas and ppn
     """
@@ -186,8 +185,9 @@ def generar_imagen(cuencas_gdf_ppn: gpd.GeoDataFrame, outdir: str, rundate: date
 
 
 def guardar_tabla(cuencas_gdf_ppn: gpd.GeoDataFrame, outdir: str, rundate: datetime.datetime, configuracion: str):
-    """ Generates a cvs from a GDF with Accumulated PPN and basins
-    
+    """
+    Generates a cvs from a GDF with Accumulated PPN and basins
+
     This functions gets a GeoDataFrame with PPN and basins informations
     and generates a CSV with that information.
 
@@ -195,7 +195,7 @@ def guardar_tabla(cuencas_gdf_ppn: gpd.GeoDataFrame, outdir: str, rundate: datet
         cuencas_gdf_ppn (GDF): dataframe to be exported
         outdir (str): path to the out dir
         rundate (str): run date of wrfout
-        configuración (str): identifier of the wrf simulation
+        configuracion (str): identifier of the wrf simulation
     """
     rundate_str = rundate.strftime('%Y_%m/%d')
     cuencas_api_dict['csv']['ppn_acum_diario']['path'] = f"{API_ROOT}/{rundate_str}/cordoba/cuencas_{configuracion}.csv"
@@ -213,7 +213,8 @@ def guardar_tabla(cuencas_gdf_ppn: gpd.GeoDataFrame, outdir: str, rundate: datet
 
 @ray.remote
 def tabla_por_hora(gdf_path, tabla_path, rundate, gdf_index, drop_na, c_rename=''):
-        """ Generates csv pear each basin
+    """
+    Generates csv pear each basin
     This function opens the GeoTiff generated in genear_tif_prec().
     Then gets the accumulated PPN within an hour, and for each basin
     and stores in a GDF.
@@ -222,7 +223,7 @@ def tabla_por_hora(gdf_path, tabla_path, rundate, gdf_index, drop_na, c_rename='
     Parameters:
         gdf_path (str): path to the geotiff
         tabla_path (str): path to the csv file
-        rundate (datetime): date of the wrf runout
+        rundate: date of the wrf runout
         gdf_index (str): columns to drop
         drop_na (bool): to drop or not to drop
         c_rename (str): rename column
@@ -303,10 +304,8 @@ def get_configuracion(wrfout) -> (str, datetime.datetime):
 
 
 def generar_producto_cuencas(wrfout, outdir_productos, outdir_tabla, configuracion=None):
-        """ This is the main functions and shoudl be called 
-    when you want to generates cuencas product from other
-    Python script.  
-
+    """
+    This is the main functions and shoudl be called when you want to generates cuencas product from other Python script.
     """
     wrfout_path = Path(wrfout)
     param, rundate = get_configuracion(wrfout_path.name)
