@@ -314,7 +314,7 @@ def generar_producto_cuencas(wrfout, outdir_productos, outdir_tabla, configuraci
     # noinspection PyTypeChecker
     cuencas_api_dict['meta']['param'] = param
     if not configuracion:
-        configuracion = f"CBA_{param}_{rundate.hour}"
+        configuracion = f"CBA_{param}_{rundate.hour:02d}"
     start = time.time()
     xds = corregir_wrfout(wrfout_path)
     logger.info(f"Tiempo corregir_wrfout = {time.time() - start}")
