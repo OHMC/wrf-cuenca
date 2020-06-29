@@ -6,16 +6,14 @@ import requests
 from requests.exceptions import RequestException
 
 from config.logging_conf import INGESTOR_LOGGER_NAME
-from config.wrf_api_constants import API_TOKEN, API_BASE_URL, API_RESPONSES
-
-headers_base = {'Authorization': f'Token {API_TOKEN}'}
+from config.wrf_api_constants import API_BASE_URL_DICT, API_RESPONSES
 
 logger = logging.getLogger(INGESTOR_LOGGER_NAME)
 
 
-def get_wrf_api_object_id(nombre, valor, campo='search'):
+def get_wrf_api_object_id(api_base_url, nombre, valor, campo='search'):
     try:
-        r = requests.get(f"{API_BASE_URL}/{nombre}/?{campo}={valor}")
+        r = requests.get(f"{api_base_url}/{nombre}/?{campo}={valor}")
         return r.json().get('results')[0].get('id')
     except IndexError:
         logger.exception(f"No se encontro el ID de {valor}")
@@ -25,9 +23,10 @@ def get_wrf_api_object_id(nombre, valor, campo='search'):
         raise
 
 
-def create_wrf_object(nombre, payload: dict):
+def create_wrf_object(api_base_url, token, nombre, payload: dict):
+    headers_base = {'Authorization': f'Token {token}'}
     try:
-        r = requests.post(f"{API_BASE_URL}/{nombre}/", json=payload, headers=headers_base)
+        r = requests.post(f"{api_base_url}/{nombre}/", json=payload, headers=headers_base)
     except RequestException:
         logger.exception(f"Error al crear objeto - nombre={nombre},payload={payload}")
         raise
@@ -42,24 +41,25 @@ def create_wrf_object(nombre, payload: dict):
 def ingest_csv_to_db(cuencas_dict: dict):
     logger.info("Iniciando ingestor de datos")
     timestamp = datetime.datetime.strftime(cuencas_dict['meta']['timestamp'], '%Y-%m-%d %H:%M')
-    parametrizacion_id = get_wrf_api_object_id('parametrizacion', cuencas_dict['meta']['param'])
+    for api_base_url, meta in API_BASE_URL_DICT.items():
+        parametrizacion_id = get_wrf_api_object_id(api_base_url, 'parametrizacion', cuencas_dict['meta']['param'])
 
-    corrida_payload = {'timestamp': timestamp, 'parametrizacion': parametrizacion_id}
-    corrida_id = create_wrf_object('corrida', corrida_payload)
-    for prod in cuencas_dict['csv'].keys():
-        producto_id = get_wrf_api_object_id('producto', prod, 'nombre')
-        path = cuencas_dict['csv'][prod]['path']
-        is_image = cuencas_dict['csv'][prod]['is_image']
-        acumulacion = cuencas_dict['csv'][prod]['acumulacion']
-        payload = {
-            "path": path,
-            "acumulacion": acumulacion,
-            "is_image": is_image,
-            "producto": producto_id,
-            "corrida": corrida_id
-        }
-        try:
-            create_wrf_object(nombre='cuencas', payload=payload)
-        except RequestException:
-            pass
-        time.sleep(0.3)
+        corrida_payload = {'timestamp': timestamp, 'parametrizacion': parametrizacion_id}
+        corrida_id = create_wrf_object(api_base_url, meta['token'], 'corrida', corrida_payload)
+        for prod in cuencas_dict['csv'].keys():
+            producto_id = get_wrf_api_object_id('producto', prod, 'nombre')
+            path = cuencas_dict['csv'][prod]['path']
+            is_image = cuencas_dict['csv'][prod]['is_image']
+            acumulacion = cuencas_dict['csv'][prod]['acumulacion']
+            payload = {
+                "path": path,
+                "acumulacion": acumulacion,
+                "is_image": is_image,
+                "producto": producto_id,
+                "corrida": corrida_id
+            }
+            try:
+                create_wrf_object(api_base_url, meta['token'], nombre='cuencas', payload=payload)
+            except RequestException:
+                pass
+            time.sleep(0.3)

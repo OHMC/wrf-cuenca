@@ -1,11 +1,7 @@
 import os
-import warnings
+import json
 
-API_TOKEN = os.getenv('API_TOKEN', '')
-if not API_TOKEN:
-    warnings.warn("No se ha seteado un token de autenticacion para la API de WRF(API_TOKEN envirnonment variable)")
-
-API_BASE_URL = 'https://ohmc.com.ar/wrf-beta/api'
+API_BASE_URL_DICT: dict = json.loads(os.getenv('API_BASE_URL_DICT'))
 
 API_ROOT = "/datos-meteo"
 
