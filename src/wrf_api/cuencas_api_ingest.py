@@ -11,7 +11,7 @@ from config.wrf_api_constants import API_BASE_URL_DICT, API_RESPONSES
 logger = logging.getLogger(INGESTOR_LOGGER_NAME)
 
 
-def get_wrf_api_object_id(api_base_url, nombre, valor, campo='search'):
+def get_wrf_api_object_id(api_base_url, nombre, valor, campo):
     try:
         r = requests.get(f"{api_base_url}/{nombre}/?{campo}={valor}")
         return r.json().get('results')[0].get('id')
@@ -42,12 +42,13 @@ def ingest_csv_to_db(cuencas_dict: dict):
     logger.info("Iniciando ingestor de datos")
     timestamp = datetime.datetime.strftime(cuencas_dict['meta']['timestamp'], '%Y-%m-%d %H:%M')
     for api_base_url, meta in API_BASE_URL_DICT.items():
-        parametrizacion_id = get_wrf_api_object_id(api_base_url, 'parametrizacion', cuencas_dict['meta']['param'])
+        parametrizacion_id = get_wrf_api_object_id(api_base_url, 'parametrizacion', cuencas_dict['meta']['param'],
+                                                   campo='search')
 
         corrida_payload = {'timestamp': timestamp, 'parametrizacion': parametrizacion_id}
         corrida_id = create_wrf_object(api_base_url, meta['token'], 'corrida', corrida_payload)
         for prod in cuencas_dict['csv'].keys():
-            producto_id = get_wrf_api_object_id('producto', prod, 'nombre')
+            producto_id = get_wrf_api_object_id(api_base_url, 'producto', prod, campo='nombre')
             path = cuencas_dict['csv'][prod]['path']
             is_image = cuencas_dict['csv'][prod]['is_image']
             acumulacion = cuencas_dict['csv'][prod]['acumulacion']
