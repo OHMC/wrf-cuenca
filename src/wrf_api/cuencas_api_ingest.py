@@ -44,24 +44,16 @@ def ingest_csv_to_db(cuencas_dict: dict):
     for api_base_url, meta in API_BASE_URL_DICT.items():
         parametrizacion_id = get_wrf_api_object_id(api_base_url, 'parametrizacion', cuencas_dict['meta']['param'],
                                                    campo='search')
-
-        corrida_payload = {'timestamp': timestamp, 'parametrizacion': parametrizacion_id}
-        corrida_id = create_wrf_object(api_base_url, meta['token'], 'corrida', corrida_payload)
         for prod in cuencas_dict['csv'].keys():
-            producto_id = get_wrf_api_object_id(api_base_url, 'producto', prod, campo='nombre')
             producto_cuenca_id = get_wrf_api_object_id(api_base_url, 'producto-cuencas', prod, campo='nombre')
             path = cuencas_dict['csv'][prod]['path']
-            is_image = cuencas_dict['csv'][prod]['is_image']
             acumulacion = cuencas_dict['csv'][prod]['acumulacion']
             payload = {
                 "path": path,
                 "acumulacion": acumulacion,
-                "is_image": is_image,
-                "producto": producto_id,
-                "corrida": corrida_id,
-                'timestamp': timestamp,
+                'producto_cuencas': producto_cuenca_id,
                 'parametrizacion': parametrizacion_id,
-                'producto_cuencas': producto_cuenca_id
+                'timestamp': timestamp,
             }
             try:
                 create_wrf_object(api_base_url, meta['token'], nombre='cuencas', payload=payload)
