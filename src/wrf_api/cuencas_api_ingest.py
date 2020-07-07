@@ -57,7 +57,9 @@ def ingest_csv_to_db(cuencas_dict: dict):
                 "acumulacion": acumulacion,
                 "is_image": is_image,
                 "producto": producto_id,
-                "corrida": corrida_id
+                "corrida": corrida_id,
+                'timestamp': timestamp,
+                'parametrizacion': parametrizacion_id
             }
             try:
                 create_wrf_object(api_base_url, meta['token'], nombre='cuencas', payload=payload)
