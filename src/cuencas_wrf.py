@@ -271,22 +271,14 @@ def generar_tabla_por_hora(outdir: str, rundate: datetime.datetime, configuracio
     cuencas_api_dict['csv']['ppn_por_hora']['acumulacion'] = "12:00:00"  # ToDo: Revisar
     path_dict = {
         'base': Path(f"{outdir}{rundate_str}/cordoba/cuencas/ppn_por_hora_{configuracion}.csv"),
-        'la_quebrada': Path(f"{outdir}{rundate_str}/cordoba/cuencas/la_quebrada/ppn_por_hora_lq_{configuracion}.csv"),
-        'san_antonio': Path(f"{outdir}{rundate_str}/cordoba/cuencas/san_antonio/ppn_por_hora_sa_{configuracion}.csv")
     }
     for p in path_dict.values():
         p.parent.mkdir(parents=True, exist_ok=True)
 
-    base_shp = 'shapefiles/Cuencas hidrográficas.shp'
-    # cuenca san antonio
-    sa_shp = 'shapefiles/cuencas_sa.shp'
-    # cuenca la quebrada
-    lq_shp = 'shapefiles/cuenca_lq.shp'
+    base_shp = 'shapefiles/cuencas_hidro_new.shp'
     rundate_id = ray.put(rundate)
     t_list = [
         tabla_por_hora.remote(base_shp, path_dict['base'], rundate_id, 'subcuenca', False, COLUM_REPLACE),
-        tabla_por_hora.remote(lq_shp, path_dict['la_quebrada'], rundate_id, 'NAME', True),
-        tabla_por_hora.remote(sa_shp, path_dict['san_antonio'], rundate_id, 'NAME', True)
     ]
     ray.get(t_list)
 
