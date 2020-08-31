@@ -324,7 +324,7 @@ def generar_producto_cuencas(wrfout, outdir_productos, outdir_tabla, configuraci
     logger.info(f"Tiempo genear_tif_prec = {time.time() - start}")
     # nc.close()
     start = time.time()
-    cuencas_gdf_ppn: gpd.GeoDataFrame = integrar_en_cuencas('shapefiles/cuencas.shp')
+    cuencas_gdf_ppn: gpd.GeoDataFrame = integrar_en_cuencas('shapefiles/cuencas_hidro_new.shp')
     logger.info(f"Tiempo integrar_en_cuencas = {time.time() - start}")
     start = time.time()
     guardar_tabla(cuencas_gdf_ppn, outdir_tabla, rundate, configuracion)
