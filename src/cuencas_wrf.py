@@ -128,6 +128,8 @@ def genear_tif_prec(plsm: xr.Dataset, out_path: str):
         gtiff_id_list.append(guardar_tif.remote(rainnc_id, arrs[t] - arrs[t - 1], f"{out_path}_{t}.tif"))
 
     gtiff_id_list.append(guardar_tif.remote(rainnc_id, arrs[33] - arrs[9], f"{out_path}.tif"))
+    gtiff_id_list.append(guardar_tif.remote(rainnc_id, arrs[45] - arrs[9], f"{out_path}_a36.tif"))
+    gtiff_id_list.append(guardar_tif.remote(rainnc_id, arrs[57] - arrs[9], f"{out_path}_a48.tif"))
 
     ray.get(gtiff_id_list)
 
@@ -144,6 +146,8 @@ def integrar_en_cuencas(cuencas_shp: str) -> gpd.GeoDataFrame:
     """
     cuencas_gdf: gpd.GeoDataFrame = gpd.read_file(cuencas_shp)
     df_zonal_stats = pd.DataFrame(zonal_stats(cuencas_shp, "geotiff/ppn.tif"))
+    #df_zonal_stats = pd.DataFrame(zonal_stats(cuencas_shp, "geotiff/ppn_36.tif"))
+    #df_zonal_stats = pd.DataFrame(zonal_stats(cuencas_shp, "geotiff/ppn_48.tif"))
 
     cuencas_gdf_ppn = pd.concat([cuencas_gdf, df_zonal_stats], axis=1).dropna(subset=['mean'])
     cuencas_gdf_ppn = cuencas_gdf_ppn.rename(columns=COLUM_REPLACE)
