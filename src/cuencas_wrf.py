@@ -204,7 +204,7 @@ def guardar_tabla(cuencas_gdf_ppn: gpd.GeoDataFrame, outdir: str, rundate: datet
     rundate_str = rundate.strftime('%Y_%m/%d')
     cuencas_api_dict['csv']['ppn_acum_diario']['path'] = f"{API_ROOT}/{rundate_str}/cordoba/cuencas_{configuracion}.csv"
     cuencas_api_dict['csv']['ppn_acum_diario']['is_image'] = False
-    cuencas_api_dict['csv']['ppn_acum_diario']['acumulacion'] = "12:00:00"  # ToDo: Revisar
+    cuencas_api_dict['csv']['ppn_acum_diario']['acumulacion'] = "24:00:00"  # ToDo: Revisar
     path = Path(f"{outdir}{rundate_str}/cordoba/cuencas_{configuracion}.csv")
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -272,7 +272,7 @@ def generar_tabla_por_hora(outdir: str, rundate: datetime.datetime, configuracio
     cuencas_api_dict['csv']['ppn_por_hora']['path'] = f"{API_ROOT}/{rundate_str}/cordoba/cuencas/" \
                                                       f"ppn_por_hora_{configuracion}.csv"
     cuencas_api_dict['csv']['ppn_por_hora']['is_image'] = False
-    cuencas_api_dict['csv']['ppn_por_hora']['acumulacion'] = "12:00:00"  # ToDo: Revisar
+    cuencas_api_dict['csv']['ppn_por_hora']['acumulacion'] = "24:00:00"  # ToDo: Revisar
     path_dict = {
         'base': Path(f"{outdir}{rundate_str}/cordoba/cuencas/ppn_por_hora_{configuracion}.csv"),
     }
