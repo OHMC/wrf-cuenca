@@ -65,7 +65,7 @@ def ingest_csv_to_db(cuencas_dict: dict):
                 'timestamp': timestamp,
             }
             try:
-                create_wrf_object(api_base_url, meta['token'], nombre='cuencas', payload=payload)
+                create_wrf_object(api_base_url, meta['token'], nombre='csvs-cuencas', payload=payload)
             except Exception:
                 pass
             time.sleep(0.3)
