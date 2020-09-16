@@ -220,9 +220,9 @@ def guardar_tabla(cuencas_gdf_ppn: gpd.GeoDataFrame, outdir: str,
     """
     Generates a cvs from a GDF with Accumulated PPN and basins
 
-    This functions gets a GeoDataFrame with PPN and basins informations
-    and generates a CSV with that information.
-
+    This functions gets a GeoDataFrame with PPN and basi    for t in range(len(plsm.variables['Times'])):
+        out_ppn[t] = out_ppn[t] + 1000
+        out_ppn[t][out_ppn[t] == 0] = np.nan
     Parameters:
         cuencas_gdf_ppn (GDF): dataframe to be exported
         outdir (str): path to the out dir
@@ -280,10 +280,7 @@ def tabla_por_hora(gdf_path, tabla_path, rundate, gdf_index, drop_na, c_rename='
         cuencas_gdf_concat = cuencas_gdf_concat.dropna(subset=['mean']).set_index(gdf_index)
         tabla_hora.iloc[i] = cuencas_gdf_concat['mean']
 
-    tabla_hora = tabla_hora.astype(float).round(2)
-    tabla_hora.index = tabla_hora.index + datetime.timedelta(hours=-3)
-    tabla_hora.to_csv(tabla_path)
-    return True
+    tabla_hora = tabla_hora.astype(float).round(2) 
 
 
 def generar_tabla_por_hora(outdir: str, rundate: datetime.datetime,
