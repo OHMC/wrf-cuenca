@@ -138,4 +138,5 @@ dmypy.json
 **/geotiff/*.tif
 .vscode/
 src/geotiff/*.tif
+src/geotiff/*.xml
 src/pickles/*

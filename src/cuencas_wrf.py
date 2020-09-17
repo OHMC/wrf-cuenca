@@ -29,7 +29,9 @@ from config.wrf_api_constants import API_ROOT
 ray.init(address=RAY_ADDRESS)
 logger = get_logger_from_config_file(CUENCAS_LOGGER_NAME)
 
-cuencas_api_dict = {'meta': {}, 'csv': {'ppn_acum_diario': {}, 'ppn_por_hora': {}}}
+cuencas_api_dict = {"24": {'meta': {}, 'csv': {'ppn_acum_diario': {}, 'ppn_por_hora': {}}},
+                    "36": {'meta': {}, 'csv': {'ppn_acum_diario': {}, 'ppn_por_hora': {}}},
+                    "48": {'meta': {}, 'csv': {'ppn_acum_diario': {}, 'ppn_por_hora': {}}}}
 
 
 def dump_cuencas_api_dict():
@@ -44,6 +46,7 @@ def getGeoT(extent, nlines, ncols):
     return [extent[0], resx, 0, extent[3], 0, -resy]
 
 
+# TodDo: ray to this
 def cambiar_projection_ppn(in_array: np.ndarray):
     """Convert Grid to New Projection.
         Parameters
@@ -120,6 +123,10 @@ def genear_tif_prec(plsm: xr.Dataset, out_path: str):
         out_path: path to the directory where to save
                         the geoptiffs
     """
+    try:
+        os.makedirs(os.path.dirname(out_path))
+    except OSError:
+        pass
 
     arrs = {}
     for t in range(len(plsm.variables['Times'])):
@@ -133,22 +140,22 @@ def genear_tif_prec(plsm: xr.Dataset, out_path: str):
         gtiff_id_list.append(guardar_tif.remote(geoTransform, target_prj,
                                                 out_ppn[t, :, :] -
                                                 out_ppn[t - 1, :, :],
-                                                f"{out_path}_{t}.tif"))
+                                                f"{out_path}ppn_{t}.tif"))
 
     gtiff_id_list.append(guardar_tif.remote(geoTransform, target_prj,
                                             out_ppn[33] - out_ppn[9],
-                                            f"{out_path}.tif"))
+                                            f"{out_path}ppn.tif"))
     gtiff_id_list.append(guardar_tif.remote(geoTransform, target_prj,
                                             out_ppn[45] - out_ppn[9],
-                                            f"{out_path}_a36.tif"))
+                                            f"{out_path}ppn_a36.tif"))
     gtiff_id_list.append(guardar_tif.remote(geoTransform, target_prj,
                                             out_ppn[57] - out_ppn[9],
-                                            f"{out_path}_a48.tif"))
+                                            f"{out_path}ppn_a48.tif"))
 
     ray.get(gtiff_id_list)
 
 
-def integrar_en_cuencas(cuencas_shp: str) -> gpd.GeoDataFrame:
+def integrar_en_cuencas(cuencas_shp: str, path: str) -> gpd.GeoDataFrame:
     """
     This functions opens a geotiff with ppn data, converts to a raster,
     integrate the ppn into cuencas and returns a GeoDataFrame object.
@@ -159,26 +166,33 @@ def integrar_en_cuencas(cuencas_shp: str) -> gpd.GeoDataFrame:
         cuencas_gdf_ppn (GeoDataFrame): a geodataframe with cuerncas and ppn
     """
     cuencas_gdf: gpd.GeoDataFrame = gpd.read_file(cuencas_shp)
-    df_zs = pd.DataFrame(zonal_stats(cuencas_shp, "geotiff/ppn.tif"))
-    df_zs_36 = pd.DataFrame(zonal_stats(cuencas_shp, "geotiff/ppn_a36.tif"))
-    df_zs_48 = pd.DataFrame(zonal_stats(cuencas_shp, "geotiff/ppn_a48.tif"))
+    df_zs = pd.DataFrame(zonal_stats(cuencas_shp, f"{path}ppn.tif"))
+    df_zs_36 = pd.DataFrame(zonal_stats(cuencas_shp, f"{path}ppn_a36.tif"))
+    df_zs_48 = pd.DataFrame(zonal_stats(cuencas_shp, f"{path}ppn_a48.tif"))
 
-    df_zs_36 = df_zs_36.rename(columns={"mean": "mean36"})
-    df_zs_48 = df_zs_48.rename(columns={"mean": "mean48"})
+    df_zs_36 = df_zs_36.rename(columns={"mean": "mean36",
+                                        "max": "max36",
+                                        "min": "min36"})
+    df_zs_48 = df_zs_48.rename(columns={"mean": "mean48",
+                                        "max": "max48",
+                                        "min": "min48"})
 
-    cuencas_gdf_ppn = pd.concat([cuencas_gdf, df_zs, df_zs_36['mean36'],
-                                 df_zs_48['mean48']],
+    cuencas_gdf_ppn = pd.concat([cuencas_gdf, df_zs, 
+                                 df_zs_36['mean36'], df_zs_36['max36'],
+                                 df_zs_36['min36'], df_zs_48['mean48'],
+                                 df_zs_48['max48'], df_zs_48['min48']],
                                 axis=1).dropna(subset=['mean'])
 
     cuencas_gdf_ppn = cuencas_gdf_ppn.rename(columns=COLUM_REPLACE)
 
     return cuencas_gdf_ppn[['subcuenca', 'cuenca', 'geometry', 'count',
-                            'max', 'min', 'mean', 'mean36', 'mean48']]
+                            'max', 'min', 'mean', 'max36', 'min36', 'mean36',
+                            'max48', 'min48', 'mean48']]
 
 
 def generar_imagen(cuencas_gdf_ppn: gpd.GeoDataFrame, outdir: str,
                    rundate: datetime.datetime, configuracion: str):
-    path = (f"{outdir }{rundate.strftime('%Y_%m/%d/')}cuencas_{configuracion}")
+    path = (f"{outdir }/plots/{rundate.strftime('%Y_%m/%d/')}cuencas_{configuracion}")
 
     try:
         os.makedirs(os.path.dirname(path))
@@ -197,7 +211,7 @@ def generar_imagen(cuencas_gdf_ppn: gpd.GeoDataFrame, outdir: str,
 
     for hour in ('', '36', '48'):
         cuencas_gdf_ppn.dropna(subset=[f'mean{hour}']).plot(
-            column='mean',
+            column=f'mean{hour}',
             vmin=0,
             vmax=100,
             edgecolor='#FFFFFF',
@@ -220,7 +234,7 @@ def guardar_tabla(cuencas_gdf_ppn: gpd.GeoDataFrame, outdir: str,
     """
     Generates a cvs from a GDF with Accumulated PPN and basins
 
-    This functions gets a GeoDataFrame with PPN and basi    for t in range(len(plsm.variables['Times'])):
+    This functions gets a GeoDataFrame with PPN and basin
         out_ppn[t] = out_ppn[t] + 1000
         out_ppn[t][out_ppn[t] == 0] = np.nan
     Parameters:
@@ -230,22 +244,51 @@ def guardar_tabla(cuencas_gdf_ppn: gpd.GeoDataFrame, outdir: str,
         configuracion (str): identifier of the wrf simulation
     """
     rundate_str = rundate.strftime('%Y_%m/%d')
-    cuencas_api_dict['csv']['ppn_acum_diario']['path'] = f"{API_ROOT}/{rundate_str}/cordoba/cuencas_{configuracion}.csv"
-    cuencas_api_dict['csv']['ppn_acum_diario']['is_image'] = False
-    cuencas_api_dict['csv']['ppn_acum_diario']['acumulacion'] = "24:00:00"
+    cuencas_api_dict['24']['csv']['ppn_acum_diario']['path'] = f"{API_ROOT}/{rundate_str}/cordoba/cuencas_{configuracion}.csv"
+    cuencas_api_dict['24']['csv']['ppn_acum_diario']['is_image'] = False
+
     path = Path(f"{outdir}{rundate_str}/cordoba/cuencas_{configuracion}.csv")
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
     except OSError:
         pass
-    cuencas_gdf_ppn = cuencas_gdf_ppn[['subcuenca', 'cuenca', 'count', 'max',
-                                       'mean', 'min', 'mean36', 'mean48']]
-    cuencas_gdf_ppn = cuencas_gdf_ppn.round(2)
-    cuencas_gdf_ppn.to_csv(path, index=False, mode='a')
+    cuencas_gdf_ppn_24 = cuencas_gdf_ppn[['subcuenca', 'cuenca', 'count', 'max',
+                                       'mean', 'min']]
+    cuencas_gdf_ppn_24 = cuencas_gdf_ppn_24.round(2)
+    cuencas_gdf_ppn_24.to_csv(path, index=False, mode='a')
+
+    cuencas_api_dict['36']['csv']['ppn_acum_diario']['path'] = f"{API_ROOT}/{rundate_str}/cordoba/cuencas_{configuracion}_36.csv"
+    cuencas_api_dict['36']['csv']['ppn_acum_diario']['is_image'] = False
+
+
+    path_36 = Path(f"{outdir}{rundate_str}/cordoba/cuencas_{configuracion}_36.csv")
+
+    cuencas_gdf_ppn_36 = cuencas_gdf_ppn[['subcuenca', 'cuenca', 'count',
+                                          'max36', 'mean36', 'min36']]
+    cuencas_gdf_ppn_36 = cuencas_gdf_ppn_36.rename(columns={"mean36": "mean",
+                                                            "max36": "max",
+                                                            "min36": "min"})
+    cuencas_gdf_ppn_36 = cuencas_gdf_ppn.round(2)
+    cuencas_gdf_ppn_36.to_csv(path_36, index=False, mode='a')
+
+    cuencas_api_dict['48']['csv']['ppn_acum_diario']['path'] = f"{API_ROOT}/{rundate_str}/cordoba/cuencas_{configuracion}_48.csv"
+    cuencas_api_dict['48']['csv']['ppn_acum_diario']['is_image'] = False
+
+
+    path_48 = Path(f"{outdir}{rundate_str}/cordoba/cuencas_{configuracion}_48.csv")
+
+    cuencas_gdf_ppn_48 = cuencas_gdf_ppn[['subcuenca', 'cuenca', 'count',
+                                          'max48', 'mean48', 'min48']]
+    cuencas_gdf_ppn_48 = cuencas_gdf_ppn_36.rename(columns={"mean48": "mean",
+                                                            "max48": "max",
+                                                            "min48": "min"})
+    cuencas_gdf_ppn_48 = cuencas_gdf_ppn.round(2)
+    cuencas_gdf_ppn_48.to_csv(path_48, index=False, mode='a')
 
 
 @ray.remote
-def tabla_por_hora(gdf_path, tabla_path, rundate, gdf_index, drop_na, c_rename=''):
+def tabla_por_hora(gdf_path: str, tabla_path: str, rundate: datetime.datetime,
+                   gdf_index, drop_na, path_gtiff, c_rename=''):
     """
     Generates csv pear each basin
     This function opens the GeoTiff generated in genear_tif_prec().
@@ -254,7 +297,7 @@ def tabla_por_hora(gdf_path, tabla_path, rundate, gdf_index, drop_na, c_rename='
     This GDF is then exported to csv files
 
     Parameters:
-        gdf_path (str): path to the geotiff
+        gdf_path (str): path to the shapefile
         tabla_path (str): path to the csv file
         rundate: date of the wrf runout
         gdf_index (str): columns to drop
@@ -268,23 +311,30 @@ def tabla_por_hora(gdf_path, tabla_path, rundate, gdf_index, drop_na, c_rename='
     if c_rename:
         cuencas_gdf = cuencas_gdf.rename(columns=c_rename)
 
-    d_range = pd.date_range(start=rundate, end=(rundate + datetime.timedelta(hours=48 + 9)), freq='H')
+    d_range = pd.date_range(start=rundate,
+                            end=(rundate + datetime.timedelta(hours=48 + 9)),
+                            freq='H')
 
     cuencas_gdf = cuencas_gdf.rename(columns=COLUM_REPLACE)
     tabla_hora = pd.DataFrame(columns=cuencas_gdf[gdf_index], index=d_range)
     tabla_hora.index.name = 'fecha'
 
     for i in range(1, len(tabla_hora)):
-        df_zs = pd.DataFrame(zonal_stats(cuencas_gdf, f"geotiff/ppn_{i}.tif"))
-        cuencas_gdf_concat = pd.concat([cuencas_gdf[gdf_index], df_zs['mean']], axis=1)
+        df_zonal_stats = pd.DataFrame(zonal_stats(cuencas_gdf, f"{path_gtiff}/ppn_{i}.tif"))
+        cuencas_gdf_concat = pd.concat([cuencas_gdf[gdf_index],
+                                        df_zonal_stats['mean']],
+                                       axis=1)
         cuencas_gdf_concat = cuencas_gdf_concat.dropna(subset=['mean']).set_index(gdf_index)
         tabla_hora.iloc[i] = cuencas_gdf_concat['mean']
 
-    tabla_hora = tabla_hora.astype(float).round(2) 
+    tabla_hora = tabla_hora.astype(float).round(2)
+    tabla_hora.index = tabla_hora.index + datetime.timedelta(hours=-3)
+    tabla_hora.to_csv(tabla_path)
+    return True
 
 
 def generar_tabla_por_hora(outdir: str, rundate: datetime.datetime,
-                           shapefile: str, configuracion: str):
+                           shapefile: str, configuracion: str, path_gtif: str):
     """ Generates csv pear each basin
     This function opens ppn data and shapefiles with basisn
     of Cordoba. Then calls a tabla_por_hora() to get ppn per hour and basin.
@@ -296,10 +346,10 @@ def generar_tabla_por_hora(outdir: str, rundate: datetime.datetime,
     """
     rundate_str = rundate.strftime('%Y_%m/%d')
     # Datos para api web
-    cuencas_api_dict['csv']['ppn_por_hora']['path'] = (f"{API_ROOT}/{rundate_str}/cordoba/cuencas/"
+    cuencas_api_dict['24']['csv']['ppn_por_hora']['path'] = (f"{API_ROOT}/{rundate_str}/cordoba/cuencas/"
                                                        f"ppn_por_hora_{configuracion}.csv")
-    cuencas_api_dict['csv']['ppn_por_hora']['is_image'] = False
-    cuencas_api_dict['csv']['ppn_por_hora']['acumulacion'] = "24:00:00"
+    cuencas_api_dict['24']['csv']['ppn_por_hora']['is_image'] = False
+
     path_dict = {
         'base': Path(f"{outdir}{rundate_str}/cordoba/cuencas/ppn_por_hora_{configuracion}.csv"),
     }
@@ -313,6 +363,7 @@ def generar_tabla_por_hora(outdir: str, rundate: datetime.datetime,
                               rundate_id,
                               'subcuenca',
                               False,
+                              path_gtif,
                               COLUM_REPLACE),
     ]
     ray.get(t_list)
@@ -343,27 +394,31 @@ def generar_producto_cuencas(wrfout, outdir_productos, outdir_tabla,
     wrfout_path = Path(wrfout)
     param, rundate = get_configuracion(wrfout_path.name)
     # noinspection PyTypeChecker
-    cuencas_api_dict['meta']['timestamp'] = rundate
+    cuencas_api_dict['24']['meta']['timestamp'] = rundate
     # noinspection PyTypeChecker
-    cuencas_api_dict['meta']['param'] = param
+    cuencas_api_dict['24']['meta']['param'] = param
     if not configuracion:
         configuracion = f"CBA_{param}_{rundate.hour:02d}"
     start = time.time()
     xds = xr.open_dataset(wrfout_path)
     logger.info(f"Tiempo corregir_wrfout = {time.time() - start}")
     start = time.time()
-    genear_tif_prec(xds, out_path='geotiff/ppn')
+    path_gtiff = (f'{outdir_productos}/geotiff/'
+                  f'{rundate.strftime("%Y_%m/%d/")}')
+    genear_tif_prec(xds, out_path=path_gtiff)
     xds.close()
     logger.info(f"Tiempo genear_tif_prec = {time.time() - start}")
     # nc.close()
     start = time.time()
-    cuencas_gdf_ppn: gpd.GeoDataFrame = integrar_en_cuencas(shapefile)
+    cuencas_gdf_ppn: gpd.GeoDataFrame = integrar_en_cuencas(shapefile,
+                                                            path_gtiff)
     logger.info(f"Tiempo integrar_en_cuencas = {time.time() - start}")
     start = time.time()
     guardar_tabla(cuencas_gdf_ppn, outdir_tabla, rundate, configuracion)
     logger.info(f"Tiempo guardar_tabla = {time.time() - start}")
     start = time.time()
-    generar_tabla_por_hora(outdir_tabla, rundate, shapefile, configuracion)
+    generar_tabla_por_hora(outdir_tabla, rundate, shapefile,
+                           configuracion, path_gtiff)
     logger.info(f"Tiempo generar_tabla_por_hora = {time.time() - start}")
 
     start = time.time()
