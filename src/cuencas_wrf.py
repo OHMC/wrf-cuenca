@@ -170,24 +170,24 @@ def integrar_en_cuencas(cuencas_shp: str, path: str) -> gpd.GeoDataFrame:
     df_zs_36 = pd.DataFrame(zonal_stats(cuencas_shp, f"{path}ppn_a36.tif"))
     df_zs_48 = pd.DataFrame(zonal_stats(cuencas_shp, f"{path}ppn_a48.tif"))
 
-    df_zs_36 = df_zs_36.rename(columns={"mean": "mean36",
-                                        "max": "max36",
-                                        "min": "min36"})
-    df_zs_48 = df_zs_48.rename(columns={"mean": "mean48",
-                                        "max": "max48",
-                                        "min": "min48"})
+    df_zs_36 = df_zs_36.rename(columns={"mean": "mean_36",
+                                        "max": "max_36",
+                                        "min": "min_36"})
+    df_zs_48 = df_zs_48.rename(columns={"mean": "mean_48",
+                                        "max": "max_48",
+                                        "min": "min_48"})
 
     cuencas_gdf_ppn = pd.concat([cuencas_gdf, df_zs, 
-                                 df_zs_36['mean36'], df_zs_36['max36'],
-                                 df_zs_36['min36'], df_zs_48['mean48'],
-                                 df_zs_48['max48'], df_zs_48['min48']],
+                                 df_zs_36['mean_36'], df_zs_36['max_36'],
+                                 df_zs_36['min_36'], df_zs_48['mean_48'],
+                                 df_zs_48['max_48'], df_zs_48['min_48']],
                                 axis=1).dropna(subset=['mean'])
 
     cuencas_gdf_ppn = cuencas_gdf_ppn.rename(columns=COLUM_REPLACE)
 
     return cuencas_gdf_ppn[['subcuenca', 'cuenca', 'geometry', 'count',
-                            'max', 'min', 'mean', 'max36', 'min36', 'mean36',
-                            'max48', 'min48', 'mean48']]
+                            'max', 'min', 'mean', 'max_36', 'min_36', 'mean_36',
+                            'max_48', 'min_48', 'mean_48']]
 
 
 def generar_imagen(cuencas_gdf_ppn: gpd.GeoDataFrame, outdir: str,
@@ -209,7 +209,7 @@ def generar_imagen(cuencas_gdf_ppn: gpd.GeoDataFrame, outdir: str,
         N=10
     )
 
-    for hour in ('', '36', '48'):
+    for hour in ('', '_36', '_48'):
         cuencas_gdf_ppn.dropna(subset=[f'mean{hour}']).plot(
             column=f'mean{hour}',
             vmin=0,
@@ -264,10 +264,10 @@ def guardar_tabla(cuencas_gdf_ppn: gpd.GeoDataFrame, outdir: str,
     path_36 = Path(f"{outdir}{rundate_str}/cordoba/cuencas_{configuracion}_36.csv")
 
     cuencas_gdf_ppn_36 = cuencas_gdf_ppn[['subcuenca', 'cuenca', 'count',
-                                          'max36', 'mean36', 'min36']]
-    cuencas_gdf_ppn_36 = cuencas_gdf_ppn_36.rename(columns={"mean36": "mean",
-                                                            "max36": "max",
-                                                            "min36": "min"})
+                                          'max_36', 'mean_36', 'min_36']]
+    cuencas_gdf_ppn_36 = cuencas_gdf_ppn_36.rename(columns={"mean_36": "mean",
+                                                            "max_36": "max",
+                                                            "min_36": "min"})
     cuencas_gdf_ppn_36 = cuencas_gdf_ppn.round(2)
     cuencas_gdf_ppn_36.to_csv(path_36, index=False, mode='a')
 
@@ -278,10 +278,10 @@ def guardar_tabla(cuencas_gdf_ppn: gpd.GeoDataFrame, outdir: str,
     path_48 = Path(f"{outdir}{rundate_str}/cordoba/cuencas_{configuracion}_48.csv")
 
     cuencas_gdf_ppn_48 = cuencas_gdf_ppn[['subcuenca', 'cuenca', 'count',
-                                          'max48', 'mean48', 'min48']]
-    cuencas_gdf_ppn_48 = cuencas_gdf_ppn_36.rename(columns={"mean48": "mean",
-                                                            "max48": "max",
-                                                            "min48": "min"})
+                                          'max_48', 'mean_48', 'min_48']]
+    cuencas_gdf_ppn_48 = cuencas_gdf_ppn_36.rename(columns={"mean_48": "mean",
+                                                            "max_48": "max",
+                                                            "min_48": "min"})
     cuencas_gdf_ppn_48 = cuencas_gdf_ppn.round(2)
     cuencas_gdf_ppn_48.to_csv(path_48, index=False, mode='a')
 
