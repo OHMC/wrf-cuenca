@@ -140,3 +140,4 @@ dmypy.json
 src/geotiff/*.tif
 src/geotiff/*.xml
 src/pickles/*
+src/notebooks/*.png

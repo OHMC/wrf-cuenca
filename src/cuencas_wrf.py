@@ -4,23 +4,27 @@ import os
 import pickle
 import re
 import time
-from pathlib import Path
-
 import ray
 import geopandas as gpd
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import rasterio
 import xarray as xr
+import fiona
+import shapely.geometry as sgeom
+from pathlib import Path
 from affine import Affine
 from matplotlib.colors import LinearSegmentedColormap
 from osgeo import osr, gdal, gdal_array
 from rasterstats import zonal_stats
+import cartopy.crs as ccrs
 
 from config.constants import (PROG_VERSION, COLUM_REPLACE, RAY_ADDRESS,
                               WRFOUT_REGEX, CUENCAS_API_PICKLE_PATH,
                               CBA_EXTENT, WRF_EXTENT, KM_PER_DEGREE,
+                              RECORTE_EXTENT, CLEVS, PRECIP_COLORMAP,
                               RESOLUTION)
 from config.logging_conf import (CUENCAS_LOGGER_NAME,
                                  get_logger_from_config_file)
@@ -113,7 +117,8 @@ def guardar_tif(geoTransform: list, target_prj: str,
     nw_ds.close()
 
 
-def genear_tif_prec(plsm: xr.Dataset, configuracion: str, out_path: str):
+def genear_img_prec(plsm: xr.Dataset, configuracion: str, out_path: str,
+                    path_png: str):
     """
     This functions gest a xarray Dataset, gets the vars RAINNC
     and RAINC and saves them as a geotiff tile
@@ -156,8 +161,86 @@ def genear_tif_prec(plsm: xr.Dataset, configuracion: str, out_path: str):
 
     ray.get(gtiff_id_list)
 
+    gen_png_prec(plsm, out_ppn[33] - out_ppn[9], path_png,
+                 configuracion, '')
+    gen_png_prec(plsm, out_ppn[45] - out_ppn[9], path_png,
+                 configuracion, '_36')
+    gen_png_prec(plsm, out_ppn[57] - out_ppn[9], path_png,
+                 configuracion, '_48')
 
-def integrar_en_cuencas(cuencas_shp: str, out_path: str, configuracion: str) -> gpd.GeoDataFrame:
+
+def gen_png_prec(plsm: xr.Dataset, arr: np.ndarray, png_path: str,
+                 configuracion: str, accum: str):
+    """
+    Plots de precipitacion acumulada para cuencas
+
+    Parameters: 
+        plsm: xarray del nc
+        arr: array de acumulacion de precipitacion
+        png_path: rundate donde guardar los png
+        accum: string para 24, 36 o 48hs
+    """
+    try:
+        os.makedirs(os.path.dirname(png_path))
+    except OSError:
+        pass
+
+    deltax = -(CBA_EXTENT[0] - CBA_EXTENT[2])/(arr.shape[0]*arr.shape[1])
+    deltay = -(CBA_EXTENT[1] - CBA_EXTENT[3])/(arr.shape[0]*arr.shape[1])
+
+    # Compute the lon/lat coordinates with rasterio.warp.transform
+    ny, nx = (arr.shape[0],arr.shape[1])
+    lon = np.arange(CBA_EXTENT[0], CBA_EXTENT[2], deltax)
+    lat = np.flip(np.arange(CBA_EXTENT[1], CBA_EXTENT[3], deltay))
+
+    # Rasterio works with 1D arrays
+    lon = np.asarray(lon).reshape((ny, nx))
+    lat = np.asarray(lat).reshape((ny, nx))
+
+    plsm.coords['lon'] = (('y', 'x'), lon)
+    plsm.coords['lat'] = (('y', 'x'), lat)
+
+    # Plot on a map
+    plt.figure(figsize=(6, 8), frameon=False)
+    ax = plt.subplot(projection=ccrs.PlateCarree())
+
+    norm = mpl.colors.BoundaryNorm(CLEVS, len(CLEVS))
+
+    cba_extent = [CBA_EXTENT[0], CBA_EXTENT[2], CBA_EXTENT[1], CBA_EXTENT[3]]
+    img_plot = ax.imshow(np.flipud(arr), origin='upper', extent=cba_extent,
+                         cmap=PRECIP_COLORMAP, norm=norm,
+                         transform=ccrs.PlateCarree())
+
+    ax.set_extent([RECORTE_EXTENT[0], RECORTE_EXTENT[2],
+                   RECORTE_EXTENT[1], RECORTE_EXTENT[3]])
+    # Abro archivo shapefile con departamentos
+    shpfile = "shapefiles/dep.shp"
+    with fiona.open(shpfile) as records:
+        geometries = [sgeom.shape(shp['geometry'])
+                      for shp in records]
+    # Agrego a la figura cada uno de los departamentos
+    ax.add_geometries(geometries, ccrs.PlateCarree(),
+                      edgecolor='slategrey', facecolor='none', linewidth=0.35)
+
+    # Abro archivo shapefile con cuencas
+    shpfile = "shapefiles/cuencas.shp"
+    with fiona.open(shpfile) as records:
+        geometries = [sgeom.shape(shp['geometry'])
+                      for shp in records]
+    # Agrego a la figura cada uno de los departamentos
+    ax.add_geometries(geometries, ccrs.PlateCarree(),
+                      edgecolor='lightgrey', facecolor='none', linewidth=0.2)
+
+    ax.coastlines('10m', color='slategrey')
+
+    gl = ax.gridlines( draw_labels=True, alpha=0.5)
+
+    plt.savefig(f'{png_path}ppn{configuracion}{accum}.png',
+                bbox_inches='tight', dpi=160, pad_inches=0)
+
+
+def integrar_en_cuencas(cuencas_shp: str, out_path: str,
+                        configuracion: str) -> gpd.GeoDataFrame:
     """
     This functions opens a geotiff with ppn data, converts to a raster,
     integrate the ppn into cuencas and returns a GeoDataFrame object.
@@ -196,7 +279,7 @@ def integrar_en_cuencas(cuencas_shp: str, out_path: str, configuracion: str) -> 
 
 def generar_imagen(cuencas_gdf_ppn: gpd.GeoDataFrame, outdir: str,
                    rundate: datetime.datetime, configuracion: str):
-    path = (f"{outdir }/plots/{rundate.strftime('%Y_%m/%d/')}cuencas_{configuracion}")
+    path = (f"{outdir }cuencas_{configuracion}")
 
     try:
         os.makedirs(os.path.dirname(path))
@@ -356,7 +439,7 @@ def generar_tabla_por_hora(outdir: str, rundate: datetime.datetime,
     rundate_str = rundate.strftime('%Y_%m/%d')
     # Datos para api web
     cuencas_api_dict['24']['csv']['ppn_por_hora']['path'] = (f"{API_ROOT}/{rundate_str}/cordoba/cuencas/"
-                                                       f"ppn_por_hora_{param}.csv")
+                                                             f"ppn_por_hora_{param}.csv")
 
     path_dict = {
         'base': Path(f"{outdir}{rundate_str}/cordoba/cuencas/ppn_por_hora_{param}.csv"),
@@ -418,9 +501,11 @@ def generar_producto_cuencas(wrfout, outdir_productos, outdir_tabla,
     start = time.time()
     path_gtiff = (f'{outdir_productos}/geotiff/'
                   f'{rundate.strftime("%Y_%m/%d/")}')
-    genear_tif_prec(xds, configuracion, out_path=path_gtiff)
+    path_png = (f'{outdir_productos}/plots/'
+                f'{rundate.strftime("%Y_%m/%d/")}')
+    genear_img_prec(xds, configuracion, path_gtiff, path_png)
     xds.close()
-    logger.info(f"Tiempo genear_tif_prec = {time.time() - start}")
+    logger.info(f"Tiempo genear_img_prec = {time.time() - start}")
     # nc.close()
     start = time.time()
     cuencas_gdf_ppn: gpd.GeoDataFrame = integrar_en_cuencas(shapefile,
@@ -436,7 +521,7 @@ def generar_producto_cuencas(wrfout, outdir_productos, outdir_tabla,
     logger.info(f"Tiempo generar_tabla_por_hora = {time.time() - start}")
 
     start = time.time()
-    generar_imagen(cuencas_gdf_ppn, outdir_productos, rundate, configuracion)
+    generar_imagen(cuencas_gdf_ppn, path_png, rundate, configuracion)
     logger.info(f"Tiempo generar_imagen = {time.time() - start}")
     dump_cuencas_api_dict()
 
