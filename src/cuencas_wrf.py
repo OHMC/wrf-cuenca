@@ -30,8 +30,8 @@ ray.init(address=RAY_ADDRESS)
 logger = get_logger_from_config_file(CUENCAS_LOGGER_NAME)
 
 cuencas_api_dict = {"24": {'meta': {}, 'csv': {'ppn_acum_diario': {}, 'ppn_por_hora': {}}},
-                    "36": {'meta': {}, 'csv': {'ppn_acum_diario': {}, 'ppn_por_hora': {}}},
-                    "48": {'meta': {}, 'csv': {'ppn_acum_diario': {}, 'ppn_por_hora': {}}}}
+                    "36": {'meta': {}, 'csv': {'ppn_acum_diario': {}}},
+                    "48": {'meta': {}, 'csv': {'ppn_acum_diario': {}}}}
 
 
 def dump_cuencas_api_dict():
@@ -249,7 +249,6 @@ def guardar_tabla(cuencas_gdf_ppn: gpd.GeoDataFrame, outdir: str,
     """
     rundate_str = rundate.strftime('%Y_%m/%d')
     cuencas_api_dict['24']['csv']['ppn_acum_diario']['path'] = f"{API_ROOT}/{rundate_str}/cordoba/cuencas_{configuracion}.csv"
-    cuencas_api_dict['24']['csv']['ppn_acum_diario']['is_image'] = False
 
     path = Path(f"{outdir}{rundate_str}/cordoba/cuencas_{configuracion}.csv")
     try:
@@ -268,7 +267,6 @@ def guardar_tabla(cuencas_gdf_ppn: gpd.GeoDataFrame, outdir: str,
     cuencas_gdf_ppn_24.to_csv(path, index=False, mode='a')
 
     cuencas_api_dict['36']['csv']['ppn_acum_diario']['path'] = f"{API_ROOT}/{rundate_str}/cordoba/cuencas_{configuracion}_36.csv"
-    cuencas_api_dict['36']['csv']['ppn_acum_diario']['is_image'] = False
 
     path_36 = Path(f"{outdir}{rundate_str}/cordoba/cuencas_{configuracion}_36.csv")
 
@@ -281,7 +279,6 @@ def guardar_tabla(cuencas_gdf_ppn: gpd.GeoDataFrame, outdir: str,
     cuencas_gdf_ppn_36.to_csv(path_36, index=False, mode='a')
 
     cuencas_api_dict['48']['csv']['ppn_acum_diario']['path'] = f"{API_ROOT}/{rundate_str}/cordoba/cuencas_{configuracion}_48.csv"
-    cuencas_api_dict['48']['csv']['ppn_acum_diario']['is_image'] = False
 
     path_48 = Path(f"{outdir}{rundate_str}/cordoba/cuencas_{configuracion}_48.csv")
 
@@ -360,7 +357,6 @@ def generar_tabla_por_hora(outdir: str, rundate: datetime.datetime,
     # Datos para api web
     cuencas_api_dict['24']['csv']['ppn_por_hora']['path'] = (f"{API_ROOT}/{rundate_str}/cordoba/cuencas/"
                                                        f"ppn_por_hora_{param}.csv")
-    cuencas_api_dict['24']['csv']['ppn_por_hora']['is_image'] = False
 
     path_dict = {
         'base': Path(f"{outdir}{rundate_str}/cordoba/cuencas/ppn_por_hora_{param}.csv"),
@@ -408,8 +404,12 @@ def generar_producto_cuencas(wrfout, outdir_productos, outdir_tabla,
     param, rundate = get_configuracion(wrfout_path.name)
     # noinspection PyTypeChecker
     cuencas_api_dict['24']['meta']['timestamp'] = rundate
+    cuencas_api_dict['36']['meta']['timestamp'] = rundate
+    cuencas_api_dict['48']['meta']['timestamp'] = rundate
     # noinspection PyTypeChecker
     cuencas_api_dict['24']['meta']['param'] = param
+    cuencas_api_dict['36']['meta']['param'] = param
+    cuencas_api_dict['48']['meta']['param'] = param
     if not configuracion:
         configuracion = f"CBA_{param}_{rundate.hour:02d}"
     start = time.time()
