@@ -76,7 +76,7 @@ def cambiar_projection_ppn(in_array: np.ndarray):
 
     for t in in_array.keys():
         # loar gdal array y se le asigna la projección y transofrmación
-        raw = gdal_array.OpenArray(in_array[t])
+        raw = gdal_array.OpenArray(np.flipud(in_array[t]))
         raw.SetProjection(source_prj.ExportToWkt())
         raw.SetGeoTransform(getGeoT(WRF_EXTENT,
                                     raw.RasterYSize,
@@ -96,7 +96,7 @@ def cambiar_projection_ppn(in_array: np.ndarray):
                             grid,
                             source_prj.ExportToWkt(),
                             target_prj.ExportToWkt(),
-                            gdal.GRA_Average,
+                            gdal.GRA_NearestNeighbour,
                             options=['NUM_THREADS=ALL_CPUS'])
 
         out_array[t] = grid.ReadAsArray()
@@ -113,7 +113,7 @@ def guardar_tif(geoTransform: list, target_prj: str,
                           count=1, dtype=str(arr.dtype),
                           crs=target_prj,
                           transform=Affine.from_gdal(*geoTransform))
-    nw_ds.write(np.flipud(arr), 1)
+    nw_ds.write(arr, 1)
     nw_ds.close()
 
 
@@ -140,24 +140,24 @@ def genear_img_prec(plsm: xr.Dataset, configuracion: str, out_path: str,
 
     out_ppn, geoTransform, target_prj = cambiar_projection_ppn(arrs)
 
-    base_path =f"{out_path}{configuracion}_ppn"
+    base_path = f"{out_path}{configuracion}_ppn"
 
     gtiff_id_list = []
     for t in range(1, out_ppn.shape[0]):
         gtiff_id_list.append(guardar_tif.remote(geoTransform, target_prj,
                                                 out_ppn[t, :, :] -
                                                 out_ppn[t - 1, :, :],
-                                                f"{base_path}_{t}.tif"))
+                                                f"geotiff/ppn_{t}.tif"))
 
     gtiff_id_list.append(guardar_tif.remote(geoTransform, target_prj,
                                             out_ppn[33] - out_ppn[9],
                                             f"{base_path}.tif"))
     gtiff_id_list.append(guardar_tif.remote(geoTransform, target_prj,
                                             out_ppn[45] - out_ppn[9],
-                                            f"{base_path}_a36.tif"))
+                                            f"{base_path}_36.tif"))
     gtiff_id_list.append(guardar_tif.remote(geoTransform, target_prj,
                                             out_ppn[57] - out_ppn[9],
-                                            f"{base_path}_a48.tif"))
+                                            f"{base_path}_48.tif"))
 
     ray.get(gtiff_id_list)
 
@@ -254,8 +254,8 @@ def integrar_en_cuencas(cuencas_shp: str, out_path: str,
 
     cuencas_gdf: gpd.GeoDataFrame = gpd.read_file(cuencas_shp)
     df_zs = pd.DataFrame(zonal_stats(cuencas_shp, f"{base_path}.tif"))
-    df_zs_36 = pd.DataFrame(zonal_stats(cuencas_shp, f"{base_path}_a36.tif"))
-    df_zs_48 = pd.DataFrame(zonal_stats(cuencas_shp, f"{base_path}_a48.tif"))
+    df_zs_36 = pd.DataFrame(zonal_stats(cuencas_shp, f"{base_path}_36.tif"))
+    df_zs_48 = pd.DataFrame(zonal_stats(cuencas_shp, f"{base_path}_48.tif"))
 
     df_zs_36 = df_zs_36.rename(columns={"mean": "mean_36",
                                         "max": "max_36",
@@ -264,7 +264,7 @@ def integrar_en_cuencas(cuencas_shp: str, out_path: str,
                                         "max": "max_48",
                                         "min": "min_48"})
 
-    cuencas_gdf_ppn = pd.concat([cuencas_gdf, df_zs, 
+    cuencas_gdf_ppn = pd.concat([cuencas_gdf, df_zs,
                                  df_zs_36['mean_36'], df_zs_36['max_36'],
                                  df_zs_36['min_36'], df_zs_48['mean_48'],
                                  df_zs_48['max_48'], df_zs_48['min_48']],
@@ -374,10 +374,8 @@ def guardar_tabla(cuencas_gdf_ppn: gpd.GeoDataFrame, outdir: str,
     cuencas_gdf_ppn_48.to_csv(path_48, index=False, mode='a')
 
 
-@ray.remote
 def tabla_por_hora(gdf_path: str, tabla_path: str, rundate: datetime.datetime,
-                   gdf_index, drop_na, path_gtiff,
-                   configuracion: str, c_rename=''):
+                   gdf_index, drop_na, configuracion: str, c_rename=''):
     """
     Generates csv pear each basin
     This function opens the GeoTiff generated in genear_tif_prec().
@@ -408,10 +406,9 @@ def tabla_por_hora(gdf_path: str, tabla_path: str, rundate: datetime.datetime,
     tabla_hora = pd.DataFrame(columns=cuencas_gdf[gdf_index], index=d_range)
     tabla_hora.index.name = 'fecha'
 
-    base_path = f"{path_gtiff}{configuracion}_ppn"
-
     for i in range(1, len(tabla_hora)):
-        df_zonal_stats = pd.DataFrame(zonal_stats(cuencas_gdf, f"{base_path}_{i}.tif"))
+        df_zonal_stats = pd.DataFrame(zonal_stats(cuencas_gdf,
+                                                  f"geotiff/ppn_{i}.tif"))
         cuencas_gdf_concat = pd.concat([cuencas_gdf[gdf_index],
                                         df_zonal_stats['mean']],
                                        axis=1)
@@ -442,23 +439,19 @@ def generar_tabla_por_hora(outdir: str, rundate: datetime.datetime,
                                                              f"ppn_por_hora_{param}.csv")
 
     path_dict = {
-        'base': Path(f"{outdir}{rundate_str}/cordoba/cuencas/ppn_por_hora_{param}.csv"),
+        'base': Path(f"{outdir}{rundate_str}/cordoba/cuencas/"
+                     f"ppn_por_hora_{param}.csv"),
     }
     for p in path_dict.values():
         p.parent.mkdir(parents=True, exist_ok=True)
 
-    rundate_id = ray.put(rundate)
-    t_list = [
-        tabla_por_hora.remote(shapefile,
-                              path_dict['base'],
-                              rundate_id,
-                              'subcuenca',
-                              False,
-                              path_gtif,
-                              configuracion,
-                              COLUM_REPLACE),
-    ]
-    ray.get(t_list)
+    tabla_por_hora(shapefile,
+                   path_dict['base'],
+                   rundate,
+                   'subcuenca',
+                   False,
+                   configuracion,
+                   COLUM_REPLACE),
 
 
 def get_configuracion(wrfout) -> (str, datetime.datetime):
