@@ -231,7 +231,6 @@ def gen_png_prec(plsm: xr.Dataset, arr: np.ndarray, png_path: str,
     ax.add_geometries(geometries, ccrs.PlateCarree(),
                       edgecolor='lightgrey', facecolor='none', linewidth=0.2)
 
-    ax.coastlines('10m', color='slategrey')
 
     gl = ax.gridlines( draw_labels=True, alpha=0.5)
 
