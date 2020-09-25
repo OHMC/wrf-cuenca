@@ -231,6 +231,8 @@ def gen_png_prec(plsm: xr.Dataset, arr: np.ndarray, png_path: str,
     ax.add_geometries(geometries, ccrs.PlateCarree(),
                       edgecolor='lightgrey', facecolor='none', linewidth=0.2)
 
+    gl = ax.gridlines(draw_labels=True, alpha=0.5)
+
     plt.savefig(f'{png_path}ppn{configuracion}{accum}.png',
                 bbox_inches='tight', dpi=160, pad_inches=0)
 
