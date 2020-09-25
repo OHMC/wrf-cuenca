@@ -207,7 +207,7 @@ def gen_png_prec(plsm: xr.Dataset, arr: np.ndarray, png_path: str,
     norm = mpl.colors.BoundaryNorm(CLEVS, len(CLEVS))
 
     cba_extent = [CBA_EXTENT[0], CBA_EXTENT[2], CBA_EXTENT[1], CBA_EXTENT[3]]
-    img_plot = ax.imshow(np.flipud(arr), origin='upper', extent=cba_extent,
+    img_plot = ax.imshow(arr, origin='upper', extent=cba_extent,
                          cmap=PRECIP_COLORMAP, norm=norm,
                          transform=ccrs.PlateCarree())
 
@@ -230,8 +230,6 @@ def gen_png_prec(plsm: xr.Dataset, arr: np.ndarray, png_path: str,
     # Agrego a la figura cada uno de los departamentos
     ax.add_geometries(geometries, ccrs.PlateCarree(),
                       edgecolor='lightgrey', facecolor='none', linewidth=0.2)
-
-    gl = ax.gridlines( draw_labels=True, alpha=0.5)
 
     plt.savefig(f'{png_path}ppn{configuracion}{accum}.png',
                 bbox_inches='tight', dpi=160, pad_inches=0)
