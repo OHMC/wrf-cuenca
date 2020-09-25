@@ -174,7 +174,7 @@ def gen_png_prec(plsm: xr.Dataset, arr: np.ndarray, png_path: str,
     """
     Plots de precipitacion acumulada para cuencas
 
-    Parameters: 
+    Parameters:
         plsm: xarray del nc
         arr: array de acumulacion de precipitacion
         png_path: rundate donde guardar los png
@@ -189,7 +189,7 @@ def gen_png_prec(plsm: xr.Dataset, arr: np.ndarray, png_path: str,
     deltay = -(CBA_EXTENT[1] - CBA_EXTENT[3])/(arr.shape[0]*arr.shape[1])
 
     # Compute the lon/lat coordinates with rasterio.warp.transform
-    ny, nx = (arr.shape[0],arr.shape[1])
+    ny, nx = (arr.shape[0], arr.shape[1])
     lon = np.arange(CBA_EXTENT[0], CBA_EXTENT[2], deltax)
     lat = np.flip(np.arange(CBA_EXTENT[1], CBA_EXTENT[3], deltay))
 
@@ -207,9 +207,9 @@ def gen_png_prec(plsm: xr.Dataset, arr: np.ndarray, png_path: str,
     norm = mpl.colors.BoundaryNorm(CLEVS, len(CLEVS))
 
     cba_extent = [CBA_EXTENT[0], CBA_EXTENT[2], CBA_EXTENT[1], CBA_EXTENT[3]]
-    img_plot = ax.imshow(arr, origin='upper', extent=cba_extent,
-                         cmap=PRECIP_COLORMAP, norm=norm,
-                         transform=ccrs.PlateCarree())
+    ax.imshow(arr, origin='upper', extent=cba_extent,
+              cmap=PRECIP_COLORMAP, norm=norm,
+              transform=ccrs.PlateCarree())
 
     ax.set_extent([RECORTE_EXTENT[0], RECORTE_EXTENT[2],
                    RECORTE_EXTENT[1], RECORTE_EXTENT[3]])
@@ -231,7 +231,7 @@ def gen_png_prec(plsm: xr.Dataset, arr: np.ndarray, png_path: str,
     ax.add_geometries(geometries, ccrs.PlateCarree(),
                       edgecolor='lightgrey', facecolor='none', linewidth=0.2)
 
-    gl = ax.gridlines(draw_labels=True, alpha=0.5)
+    ax.gridlines(draw_labels=True, alpha=0.5)
 
     plt.savefig(f'{png_path}ppn{configuracion}{accum}.png',
                 bbox_inches='tight', dpi=160, pad_inches=0)
@@ -271,7 +271,8 @@ def integrar_en_cuencas(cuencas_shp: str, out_path: str,
     cuencas_gdf_ppn = cuencas_gdf_ppn.rename(columns=COLUM_REPLACE)
 
     return cuencas_gdf_ppn[['subcuenca', 'cuenca', 'geometry', 'count',
-                            'max', 'min', 'mean', 'max_36', 'min_36', 'mean_36',
+                            'max', 'min', 'mean',
+                            'max_36', 'min_36', 'mean_36',
                             'max_48', 'min_48', 'mean_48']]
 
 
@@ -349,7 +350,8 @@ def guardar_tabla(cuencas_gdf_ppn: gpd.GeoDataFrame, outdir: str,
 
     cuencas_api_dict['36']['csv']['ppn_acum_diario']['path'] = f"{API_ROOT}/{rundate_str}/cordoba/cuencas_{configuracion}_36.csv"
 
-    path_36 = Path(f"{outdir}{rundate_str}/cordoba/cuencas_{configuracion}_36.csv")
+    path_36 = Path(f"{outdir}{rundate_str}/cordoba/cuencas_"
+                   f"{configuracion}_36.csv")
 
     cuencas_gdf_ppn_36 = cuencas_gdf_ppn[['subcuenca', 'cuenca', 'count',
                                           'max_36', 'mean_36', 'min_36']]
@@ -361,7 +363,8 @@ def guardar_tabla(cuencas_gdf_ppn: gpd.GeoDataFrame, outdir: str,
 
     cuencas_api_dict['48']['csv']['ppn_acum_diario']['path'] = f"{API_ROOT}/{rundate_str}/cordoba/cuencas_{configuracion}_48.csv"
 
-    path_48 = Path(f"{outdir}{rundate_str}/cordoba/cuencas_{configuracion}_48.csv")
+    path_48 = Path(f"{outdir}{rundate_str}/cordoba/cuencas_"
+                   f"{configuracion}_48.csv")
 
     cuencas_gdf_ppn_48 = cuencas_gdf_ppn[['subcuenca', 'cuenca', 'count',
                                           'max_48', 'mean_48', 'min_48']]
