@@ -148,18 +148,24 @@ def genear_img_prec(plsm: xr.Dataset, configuracion: str, out_path: str,
                                                 out_ppn[t, :, :] -
                                                 out_ppn[t - 1, :, :],
                                                 f"geotiff/ppn_{t}.tif"))
+    # paths geotiff 24, 36 y 48 hs
+    gtiff_path_24 = f"{base_path}.tif"
+    gtiff_path_36 = f"{base_path}_36.tif"
+    gtiff_path_48 = f"{base_path}_48.tif"
 
     gtiff_id_list.append(guardar_tif.remote(geoTransform, target_prj,
                                             out_ppn[33] - out_ppn[9],
-                                            f"{base_path}.tif"))
+                                            gtiff_path_24))
     gtiff_id_list.append(guardar_tif.remote(geoTransform, target_prj,
                                             out_ppn[45] - out_ppn[9],
-                                            f"{base_path}_36.tif"))
+                                            gtiff_path_36))
     gtiff_id_list.append(guardar_tif.remote(geoTransform, target_prj,
                                             out_ppn[57] - out_ppn[9],
-                                            f"{base_path}_48.tif"))
-
+                                            gtiff_path_48))
     ray.get(gtiff_id_list)
+    cuencas_api_dict['24']['csv']['ppn_acum_diario']['geotiff'] = gtiff_path_24
+    cuencas_api_dict['36']['csv']['ppn_acum_diario']['geotiff'] = gtiff_path_36
+    cuencas_api_dict['48']['csv']['ppn_acum_diario']['geotiff'] = gtiff_path_48
 
     gen_png_prec(plsm, out_ppn[33] - out_ppn[9], path_png,
                  configuracion, '')

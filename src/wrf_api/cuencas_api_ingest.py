@@ -1,6 +1,6 @@
+import re
 import datetime
 import logging
-import time
 from json.decoder import JSONDecodeError
 
 import requests
@@ -10,6 +10,7 @@ from config.logging_conf import INGESTOR_LOGGER_NAME
 from config.wrf_api_constants import API_BASE_URL_DICT
 
 logger = logging.getLogger(INGESTOR_LOGGER_NAME)
+GTIFF_RE = re.compile(r"(?P<base_path>^[\w/]+)(?P<api_path>/img/geotiff/[\w/]+\.tif)")
 
 
 def get_wrf_api_object_id(api_base_url, nombre, query):
@@ -72,6 +73,25 @@ def ingest_csv_to_db(cuencas_dict: dict):
                     'timestamp': timestamp,
                 }
                 try:
-                    create_wrf_object(api_base_url, meta['token'], nombre='csvs-cuencas', payload=payload)
+                    cuenca_id = create_wrf_object(api_base_url, meta['token'], nombre='csvs-cuencas', payload=payload)
                 except Exception:
-                    pass
+                    continue
+
+                if 'geotiff' in prod_dict.keys():
+                    m = re.match(GTIFF_RE, prod_dict['geotiff'])
+                    if m:
+                        m_dict = m.groupdict()
+                        try:
+                            gtiff_api_path = m_dict.get('api_path')
+                        except KeyError:
+                            logger.exception("Error al extraer api_path para GeoTiff")
+                            continue
+                        gtiff_payload = {
+                            "path": gtiff_api_path,
+                            "csv_cuenca": cuenca_id
+                        }
+                        try:
+                            create_wrf_object(api_base_url, meta['token'], nombre='geotiff-cuencas',
+                                              payload=gtiff_payload)
+                        except Exception:
+                            continue
