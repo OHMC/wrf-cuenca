@@ -364,7 +364,7 @@ def guardar_tabla(cuencas_gdf_ppn: gpd.GeoDataFrame, outdir: str,
     cuencas_gdf_ppn_36 = cuencas_gdf_ppn_36.rename(columns={"mean_36": "mean",
                                                             "max_36": "max",
                                                             "min_36": "min"})
-    cuencas_gdf_ppn_36 = cuencas_gdf_ppn.round(2)
+    cuencas_gdf_ppn_36 = cuencas_gdf_ppn_36.round(2)
     cuencas_gdf_ppn_36.to_csv(path_36, index=False, mode='a')
 
     cuencas_api_dict['48']['csv']['ppn_acum_diario']['path'] = f"{API_ROOT}/{rundate_str}/cordoba/cuencas_{configuracion}_48.csv"
@@ -374,10 +374,10 @@ def guardar_tabla(cuencas_gdf_ppn: gpd.GeoDataFrame, outdir: str,
 
     cuencas_gdf_ppn_48 = cuencas_gdf_ppn[['subcuenca', 'cuenca', 'count',
                                           'max_48', 'mean_48', 'min_48']]
-    cuencas_gdf_ppn_48 = cuencas_gdf_ppn_36.rename(columns={"mean_48": "mean",
+    cuencas_gdf_ppn_48 = cuencas_gdf_ppn_48.rename(columns={"mean_48": "mean",
                                                             "max_48": "max",
                                                             "min_48": "min"})
-    cuencas_gdf_ppn_48 = cuencas_gdf_ppn.round(2)
+    cuencas_gdf_ppn_48 = cuencas_gdf_ppn_48.round(2)
     cuencas_gdf_ppn_48.to_csv(path_48, index=False, mode='a')
 
 
