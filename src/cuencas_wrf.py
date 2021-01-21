@@ -35,7 +35,8 @@ logger = get_logger_from_config_file(CUENCAS_LOGGER_NAME)
 
 cuencas_api_dict = {"24": {'meta': {}, 'csv': {'ppn_acum_diario': {}, 'ppn_por_hora': {}}},
                     "36": {'meta': {}, 'csv': {'ppn_acum_diario': {}}},
-                    "48": {'meta': {}, 'csv': {'ppn_acum_diario': {}}}}
+                    "48": {'meta': {}, 'csv': {'ppn_acum_diario': {}}},
+                    "72": {'meta': {}, 'csv': {'ppn_acum_diario': {}}}}
 
 
 def dump_cuencas_api_dict():
@@ -152,6 +153,7 @@ def genear_img_prec(plsm: xr.Dataset, configuracion: str, out_path: str,
     gtiff_path_24 = f"{base_path}.tif"
     gtiff_path_36 = f"{base_path}_36.tif"
     gtiff_path_48 = f"{base_path}_48.tif"
+    gtiff_path_72 = f"{base_path}_72.tif"
 
     gtiff_id_list.append(guardar_tif.remote(geoTransform, target_prj,
                                             out_ppn[33] - out_ppn[9],
@@ -162,10 +164,14 @@ def genear_img_prec(plsm: xr.Dataset, configuracion: str, out_path: str,
     gtiff_id_list.append(guardar_tif.remote(geoTransform, target_prj,
                                             out_ppn[57] - out_ppn[9],
                                             gtiff_path_48))
+    gtiff_id_list.append(guardar_tif.remote(geoTransform, target_prj,
+                                            out_ppn[81] - out_ppn[9],
+                                            gtiff_path_72))
     ray.get(gtiff_id_list)
     cuencas_api_dict['24']['csv']['ppn_acum_diario']['geotiff'] = gtiff_path_24
     cuencas_api_dict['36']['csv']['ppn_acum_diario']['geotiff'] = gtiff_path_36
     cuencas_api_dict['48']['csv']['ppn_acum_diario']['geotiff'] = gtiff_path_48
+    cuencas_api_dict['72']['csv']['ppn_acum_diario']['geotiff'] = gtiff_path_72
 
     gen_png_prec(plsm, out_ppn[33] - out_ppn[9], path_png,
                  configuracion, '')
