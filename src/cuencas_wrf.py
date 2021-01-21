@@ -179,6 +179,8 @@ def genear_img_prec(plsm: xr.Dataset, configuracion: str, out_path: str,
                  configuracion, '_36')
     gen_png_prec(plsm, out_ppn[57] - out_ppn[9], path_png,
                  configuracion, '_48')
+    gen_png_prec(plsm, out_ppn[81] - out_ppn[9], path_png,
+                 configuracion, '_72')
 
 
 def gen_png_prec(plsm: xr.Dataset, arr: np.ndarray, png_path: str,
@@ -266,6 +268,7 @@ def integrar_en_cuencas(cuencas_shp: str, out_path: str,
     df_zs = pd.DataFrame(zonal_stats(cuencas_shp, f"{base_path}.tif"))
     df_zs_36 = pd.DataFrame(zonal_stats(cuencas_shp, f"{base_path}_36.tif"))
     df_zs_48 = pd.DataFrame(zonal_stats(cuencas_shp, f"{base_path}_48.tif"))
+    df_zs_72 = pd.DataFrame(zonal_stats(cuencas_shp, f"{base_path}_72.tif"))
 
     df_zs_36 = df_zs_36.rename(columns={"mean": "mean_36",
                                         "max": "max_36",
@@ -273,11 +276,15 @@ def integrar_en_cuencas(cuencas_shp: str, out_path: str,
     df_zs_48 = df_zs_48.rename(columns={"mean": "mean_48",
                                         "max": "max_48",
                                         "min": "min_48"})
-
+    df_zs_72 = df_zs_72.rename(columns={"mean": "mean_72",
+                                        "max": "max_72",
+                                        "min": "min_72"})
     cuencas_gdf_ppn = pd.concat([cuencas_gdf, df_zs,
                                  df_zs_36['mean_36'], df_zs_36['max_36'],
-                                 df_zs_36['min_36'], df_zs_48['mean_48'],
-                                 df_zs_48['max_48'], df_zs_48['min_48']],
+                                 df_zs_36['min_36'], df_zs_48['mean_48'], 
+                                 df_zs_48['max_48'], df_zs_48['min_48'], 
+                                 df_zs_72['mean_72'], df_zs_72['max_72'],
+                                 df_zs_72['min_72']],
                                 axis=1).dropna(subset=['mean'])
 
     cuencas_gdf_ppn = cuencas_gdf_ppn.rename(columns=COLUM_REPLACE)
@@ -285,7 +292,8 @@ def integrar_en_cuencas(cuencas_shp: str, out_path: str,
     return cuencas_gdf_ppn[['subcuenca', 'cuenca', 'geometry', 'count',
                             'max', 'min', 'mean',
                             'max_36', 'min_36', 'mean_36',
-                            'max_48', 'min_48', 'mean_48']]
+                            'max_48', 'min_48', 'mean_48',
+                            'max_72', 'min_72', 'mean_72',]]
 
 
 def generar_imagen(cuencas_gdf_ppn: gpd.GeoDataFrame, outdir: str,
@@ -307,7 +315,7 @@ def generar_imagen(cuencas_gdf_ppn: gpd.GeoDataFrame, outdir: str,
         N=10
     )
 
-    for hour in ('', '_36', '_48'):
+    for hour in ('', '_36', '_48', '_72'):
         cuencas_gdf_ppn.dropna(subset=[f'mean{hour}']).plot(
             column=f'mean{hour}',
             vmin=0,
@@ -353,7 +361,8 @@ def guardar_tabla(cuencas_gdf_ppn: gpd.GeoDataFrame, outdir: str,
     cuencas_gdf_ppn = cuencas_gdf_ppn[['subcuenca', 'cuenca', 'count',
                                        'max', 'mean', 'min',
                                        'max_36', 'mean_36', 'min_36',
-                                       'max_48', 'mean_48', 'min_48']]
+                                       'max_48', 'mean_48', 'min_48',
+                                       'max_72', 'mean_72', 'min_72']]
 
     cuencas_gdf_ppn_24 = cuencas_gdf_ppn[['subcuenca', 'cuenca', 'count',
                                           'max', 'mean', 'min']]
@@ -385,6 +394,19 @@ def guardar_tabla(cuencas_gdf_ppn: gpd.GeoDataFrame, outdir: str,
                                                             "min_48": "min"})
     cuencas_gdf_ppn_48 = cuencas_gdf_ppn_48.round(2)
     cuencas_gdf_ppn_48.to_csv(path_48, index=False, mode='a')
+
+    cuencas_api_dict['72']['csv']['ppn_acum_diario']['path'] = f"{API_ROOT}/{rundate_str}/cordoba/cuencas_{configuracion}_72.csv"
+
+    path_72 = Path(f"{outdir}{rundate_str}/cordoba/cuencas_"
+                   f"{configuracion}_72.csv")
+
+    cuencas_gdf_ppn_72 = cuencas_gdf_ppn[['subcuenca', 'cuenca', 'count',
+                                          'max_72', 'mean_72', 'min_72']]
+    cuencas_gdf_ppn_72 = cuencas_gdf_ppn_72.rename(columns={"mean_72": "mean",
+                                                            "max_72": "max",
+                                                            "min_72": "min"})
+    cuencas_gdf_ppn_72 = cuencas_gdf_ppn_72.round(2)
+    cuencas_gdf_ppn_72.to_csv(path_72, index=False, mode='a')
 
 
 def tabla_por_hora(gdf_path: str, tabla_path: str, rundate: datetime.datetime,
@@ -495,10 +517,13 @@ def generar_producto_cuencas(wrfout, outdir_productos, outdir_tabla,
     cuencas_api_dict['24']['meta']['timestamp'] = rundate
     cuencas_api_dict['36']['meta']['timestamp'] = rundate
     cuencas_api_dict['48']['meta']['timestamp'] = rundate
+    cuencas_api_dict['72']['meta']['timestamp'] = rundate
+
     # noinspection PyTypeChecker
     cuencas_api_dict['24']['meta']['param'] = param
     cuencas_api_dict['36']['meta']['param'] = param
     cuencas_api_dict['48']['meta']['param'] = param
+    cuencas_api_dict['72']['meta']['param'] = param
     if not configuracion:
         configuracion = f"CBA_{param}_{rundate.hour:02d}"
     start = time.time()
