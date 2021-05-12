@@ -281,8 +281,8 @@ def integrar_en_cuencas(cuencas_shp: str, out_path: str,
                                         "min": "min_72"})
     cuencas_gdf_ppn = pd.concat([cuencas_gdf, df_zs,
                                  df_zs_36['mean_36'], df_zs_36['max_36'],
-                                 df_zs_36['min_36'], df_zs_48['mean_48'], 
-                                 df_zs_48['max_48'], df_zs_48['min_48'], 
+                                 df_zs_36['min_36'], df_zs_48['mean_48'],
+                                 df_zs_48['max_48'], df_zs_48['min_48'],
                                  df_zs_72['mean_72'], df_zs_72['max_72'],
                                  df_zs_72['min_72']],
                                 axis=1).dropna(subset=['mean'])
@@ -293,7 +293,7 @@ def integrar_en_cuencas(cuencas_shp: str, out_path: str,
                             'max', 'min', 'mean',
                             'max_36', 'min_36', 'mean_36',
                             'max_48', 'min_48', 'mean_48',
-                            'max_72', 'min_72', 'mean_72',]]
+                            'max_72', 'min_72', 'mean_72']]
 
 
 def generar_imagen(cuencas_gdf_ppn: gpd.GeoDataFrame, outdir: str,
@@ -475,7 +475,7 @@ def generar_tabla_por_hora(outdir: str, rundate: datetime.datetime,
 
     path_dict = {
         'base': Path(f"{outdir}{rundate_str}/cordoba/cuencas/"
-                     f"ppn_por_hora_{param}.csv"),
+                     f"ppn_por_hora_{param}_{rundate.hour:02d}.csv"),
     }
     for p in path_dict.values():
         p.parent.mkdir(parents=True, exist_ok=True)
